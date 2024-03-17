@@ -1,18 +1,27 @@
-from datasets.ucf import load_data, transforms
+import torch
+import torch.utils.data as data
+import argparse
+import yaml
+import os
 import cv2
+import pickle
+from datasets.ucf import transforms
+from datasets.ucf.load_data import UCF_dataset
+    
+if __name__ == "__main__":
+    root_path = "/home/manh/Datasets/UCF101-24/ucf242"
+    split_path = "trainlist.txt"
+    data_path = "rgb-images"
+    ann_path = "labels"
+    clip_length = 16
+    sampling_rate = 1
 
-root_path = '/home/manh/Datasets/UCF101-24/ucf24/'
-split_path = 'trainlist.txt'
-data_path  = 'rgb-images'
-ann_path   = 'annotation/pyannot.pkl'
-tf         = transforms.UCF_transform()
-clip_length = 16
-sampling_rate = 1
+    labels = set()
 
-tt = load_data.UCF_dataset(root_path, split_path, data_path, ann_path, clip_length, sampling_rate, tf)
-data = tt.__getitem__(10000)
-
-clip, boxes, label = data 
-
-print(boxes)
-print(label)
+    dataset = UCF_dataset(root_path, split_path, data_path, ann_path, clip_length, sampling_rate)
+    for i in range(len(dataset)):
+        clip, boxes, label = dataset.__getitem__(i)
+        for lb in label:
+            labels.add(lb)
+        
+    print(labels)
