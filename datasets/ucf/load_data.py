@@ -55,7 +55,7 @@ class UCF_dataset(data.Dataset):
         path = os.path.join(class_name, video_name) # e.g : Basketball/v_Basketball_g08_c01
         clip        = []
         boxes       = []
-        label       = 0
+        label       = []
         for i in reversed(range(self.clip_length)):
             cur_frame_idx = key_frame_idx - i*self.sampling_rate
 
@@ -66,37 +66,25 @@ class UCF_dataset(data.Dataset):
             cur_frame_path = os.path.join(video_path, '{:05d}.jpg'.format(cur_frame_idx))
             cur_frame      = cv2.imread(cur_frame_path)/255.0
             H, W, C        = cur_frame.shape
-
+            cur_frame      = cv2.resize(cur_frame, (224, 224))
             clip.append(cur_frame)
 
-            # get annotation for above frame
-            clip_ann     = self.ann_dict[path]['annotations'][0]  # {label:int, boxes:np.array [nbox, 4 (x_topleft, y_topleft, w, h)], ef:int, sf:int}'
-            start_frame  = clip_ann['sf']
-            ann_idx      = cur_frame_idx - start_frame
+        # get annotation for key frame
+        clip_ann     = self.ann_dict[path]['annotations'][0]  # {label:int, boxes:np.array [nbox, 4 (x_topleft, y_topleft, w, h)], ef:int, sf:int}'
+        start_frame  = clip_ann['sf']
 
-            if ann_idx >= 0:
-                label        = clip_ann['label']
-                frame_boxes  = []
-                box          = clip_ann['boxes'][ann_idx]
-                frame_boxes.append([box[0]/W, box[1]/H, box[2]/W, box[3]/H])
-            else:
-                frame_boxes = [None]
+        label        = clip_ann['label']
 
-            boxes.append(frame_boxes)
+        boxes  = []
+        box          = clip_ann['boxes'][key_frame_idx - start_frame]
+        boxes.append(torch.tensor([box[0]/W, box[1]/H, box[2]/W, box[3]/H]))
 
         # clip  : list of (num_frame) np.array [H, W, C] (BGR order, 0...1)
-        # boxes : list of (num_frame) list of (num_box, in ucf101-24 = 1) np.array [(x, y, w, h)], relative coordinate
+        # boxes : list of (num_box, in ucf101-24 = 1) tensor [nbox, 4], relative coordinate
         # label : a scalar 
         clip, boxes = self.transform(clip, boxes)
 
-        #for i, frame in enumerate(clip):
-            #box = boxes[i][0]
-            #if box is not None:
-                #cv2.rectangle(frame, (box[0], box[1]), (box[0] + box[2], box[1] + box[3]), 1, 1)
-            #cv2.imshow('img', frame)
-            #cv2.waitKey()
-
-        # clip  : tensor [numframe, C, H, W]
-        # boxes : list of (num_frame) list of (num_box) tensor [nbox, 4], relative coordinate
-        # label : scalar
+        # clip  : tensor [C, numframe, H, W] (RBG order)
+        # boxes : list of (num_box) tensor [nbox, 4], relative coordinate
+        # label : a scalar
         return clip, boxes, label

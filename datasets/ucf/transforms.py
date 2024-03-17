@@ -9,7 +9,7 @@ class UCF_transform():
         boxes : list of (num_frame) list of (num_box, in ucf101-24 = 1) np.array [(x, y, w, h)] relative coordinate
     
     Return:
-        clip  : torch.tensor [num_frame, C, H, W] (RGB order, 0..1)
+        clip  : torch.tensor [C, num_frame, H, W] (RGB order, 0..1)
         boxes : not change
     """
 
@@ -19,12 +19,12 @@ class UCF_transform():
     def cvt_to_tensor(self, clip):
         clip = np.array(clip)
         clip = torch.tensor(clip)
-        clip = clip[:, :, :, (2, 1, 0)].permute(0, 3, 1, 2).contiguous() # BGR -> RGB
+        clip = clip[:, :, :, (2, 1, 0)].permute(3, 0, 1, 2).contiguous() # BGR -> RGB
         return clip
 
     def normalize(self, clip, mean=ucf_config.MEAN, std=ucf_config.STD):
-        mean  = torch.tensor(mean).view(1, -1, 1, 1)
-        std   = torch.tensor(std).view(1, -1, 1, 1)
+        mean  = torch.tensor(mean).view(-1, 1, 1, 1)
+        std   = torch.tensor(std).view(-1, 1, 1, 1)
         clip -= mean
         clip /= std
         return clip
