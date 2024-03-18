@@ -40,7 +40,7 @@ class UCF_dataset(data.Dataset):
     def __len__(self):
         return self.nSample
     
-    def __getitem__(self, index):
+    def __getitem__(self, index, get_origin_image=False):
         key_frame_path = self.lines[index].rstrip()                   # e.g : labels/Basketball/v_Basketball_g08_c01/00070.txt
         # for linux, replace '/' by '\' for window 
         split_parts    = key_frame_path.split('/')                    # e.g : ['labels', 'Basketball', 'v_Basketball_g08_c01', '00070.txt']
@@ -66,6 +66,10 @@ class UCF_dataset(data.Dataset):
             H, W, C        = cur_frame.shape
             cur_frame      = cv2.resize(cur_frame, (300, 300))
             clip.append(cur_frame)
+
+        if get_origin_image == True:
+            key_frame_path     = os.path.join(video_path, '{:05d}.jpg'.format(key_frame_idx))
+            original_image     = cv2.imread(key_frame_path)
 
         # get annotation for key frame
         ann_file_name = os.path.join(ann_path, '{:05d}.txt'.format(key_frame_idx))
@@ -95,4 +99,7 @@ class UCF_dataset(data.Dataset):
         # clip   : tensor [C, numframe, H, W] (RBG order)
         # boxes  : tensor of (num_box) tensor [nbox, 4], relative coordinate
         # labels : tensor of (num_box) scalar
-        return clip, boxes, labels
+        if get_origin_image == True : 
+            return original_image, clip, boxes, labels
+        else:
+            return clip, boxes, labels

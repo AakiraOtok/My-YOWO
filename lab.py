@@ -19,9 +19,4 @@ if __name__ == "__main__":
     labels = set()
 
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path, clip_length, sampling_rate)
-    for i in range(len(dataset)):
-        clip, boxes, label = dataset.__getitem__(i)
-        for lb in label:
-            labels.add(lb)
-        
-    print(labels)
+    print(len(dataset))

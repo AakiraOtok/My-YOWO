@@ -23,11 +23,11 @@ def warmup_learning_rate(optimizer, epoch, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr_init + (lr - lr_init)*epoch/5
 
-def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(80000, 100000), max_iter=200000):
+def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(80000, 100000), max_iter=200000, acc_grad=16):
     torch.backends.cudnn.benchmark = True
     model.to("cuda")
     dboxes = model.create_prior_boxes().to("cuda")
-    iteration = -1
+    iteration = 0
 
     while(1):
         for batch_clip, batch_bboxes, batch_labels in dataloader: 
@@ -53,12 +53,12 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(8000
             nn.utils.clip_grad_value_(model.parameters(), clip_value=2.0)
             optimizer.step()
 
-            print("iteration : {}, time = {}, loss = {}".format(iteration + 1, round(time.time() - t_batch, 2), loss))
-                # save lại mỗi 1000 iteration
-            if (iteration + 1) % 1000 == 0:
-                torch.save(model.state_dict(), r"/home/manh/checkpoint/iteration_" + str(iteration + 1) + ".pth")
-                print("Saved model at iteration : {}".format(iteration + 1))
-                if iteration + 1 == max_iter:
+            print("iteration : {}, time = {}, loss = {}".format(iteration, round(time.time() - t_batch, 2), loss))
+                # save lại mỗi 10000 iteration
+            if iteration % 10000 == 0:
+                torch.save(model.state_dict(), r"/home/manh/checkpoint/iteration_" + str(iteration) + ".pth")
+                print("Saved model at iteration : {}".format(iteration))
+                if iteration == max_iter:
                     sys.exit()
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
@@ -99,4 +99,4 @@ if __name__ == "__main__":
 
     optimizer  = optim.SGD(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr=1e-3, momentum=0.9, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(60000, 100000), max_iter=120000)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(400000, 1000000, 1600000), max_iter=3000000)
