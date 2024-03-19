@@ -23,20 +23,15 @@ def warmup_learning_rate(optimizer, epoch, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr_init + (lr - lr_init)*epoch/5
 
-def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(80000, 100000), max_iter=200000, acc_grad=16):
+def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
     model.to("cuda")
     dboxes = model.create_prior_boxes().to("cuda")
-    iteration = 0
+    cur_epoch = 1
 
-    while(1):
-        for batch_clip, batch_bboxes, batch_labels in dataloader: 
-            iteration += 1
+    while(cur_epoch <= max_epoch):
+        for iteration, (batch_clip, batch_bboxes, batch_labels) in enumerate(dataloader): 
             t_batch = time.time()
-
-            if iteration in adjustlr_schedule:
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] *= 0.1
 
             batch_size   = batch_clip.shape[0]
             batch_clip   = batch_clip.to("cuda")
@@ -53,13 +48,15 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(8000
             nn.utils.clip_grad_value_(model.parameters(), clip_value=2.0)
             optimizer.step()
 
-            print("iteration : {}, time = {}, loss = {}".format(iteration, round(time.time() - t_batch, 2), loss))
-                # save lại mỗi 10000 iteration
-            if iteration % 10000 == 0:
-                torch.save(model.state_dict(), r"/home/manh/checkpoint/iteration_" + str(iteration) + ".pth")
-                print("Saved model at iteration : {}".format(iteration))
-                if iteration == max_iter:
-                    sys.exit()
+            print("epoch : {}, iteration : {}, time = {}, loss = {}".format(cur_epoch, iteration + 1, round(time.time() - t_batch, 2), loss))
+
+        if cur_epoch in adjustlr_schedule:
+            for param_group in optimizer.param_groups: 
+                param_group['lr'] *= 0.1
+
+        torch.save(model.state_dict(), r"/home/manh/checkpoint/epoch_" + str(cur_epoch) + ".pth")
+        print("Saved model at epoch : {}".format(cur_epoch))
+        cur_epoch += 1
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
 from model.MyYOWO import MyYOWO
@@ -99,4 +96,4 @@ if __name__ == "__main__":
 
     optimizer  = optim.SGD(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr=1e-3, momentum=0.9, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(400000, 1000000, 1600000), max_iter=3000000)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), max_epoch=9)

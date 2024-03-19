@@ -316,7 +316,8 @@ class MyYOWO(nn.Module):
         # "For SSD512 model, we add extra conv12 2 for prediction, set smin to 0.15, and 0.07 on conv4 3...""
 
 
-        box_scales    = [0.07, 0.15, 0.3375, 0.525, 0.7125, 0.9] 
+        box_scales    = [0.1, 0.2, 0.375, 0.55, 0.725, 0.9] 
+
         
             
         aspect_ratios = [
