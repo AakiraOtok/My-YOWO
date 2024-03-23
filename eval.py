@@ -99,7 +99,7 @@ def calc_APs(model, dataset, threshold=0.5, num_classes=21):
             conf.squeeze_(0)   # [1, 8732, num_classes] ->  [8732, num_classes]
             
             # [nbox, 4], [nbox]     ,  [nbox], nếu không có box được tìm thấy thì trả về None
-            pred_bboxes, pred_labels, pred_confs = Non_Maximum_Suppression(dboxes, offset, conf, iou_threshold=0.45, num_classes=num_classes)
+            pred_bboxes, pred_labels, pred_confs = Non_Maximum_Suppression(dboxes, offset, conf, conf_threshold=0.005, iou_threshold=0.5, num_classes=num_classes)
 
             # sort lại theo confidence score
             if (pred_bboxes != None):
@@ -206,7 +206,7 @@ def eval_on_UCF101(pretrain_path, size=300):
 
 if __name__ == "__main__":
 
-    pretrain_path = "/home/manh/checkpoint/iteration_110000.pth"
+    pretrain_path = "/home/manh/checkpoint/epoch_9.pth"
     size          = 300
     num_classes   = 25
 

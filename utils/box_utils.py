@@ -17,6 +17,7 @@ import sys
 import glob
 
 from math import sqrt
+import math
 
 # adapted from https://inside-machinelearning.com/en/bounding-boxes-python-function/
 # một chút sửa đổi để phù hợp với mục đích sử dụng
@@ -157,7 +158,7 @@ def jaccard(box_a, box_b):
 
     return inter/(area - inter)
 
-def matching_strategy_1(dboxes, bboxes, labels, offset_t, labels_t, idx, threshold=0.5):
+def matching_strategy_1(dboxes, bboxes, labels, offset_t, labels_t, idx, threshold=0.5, get_encode=True):
     """_summary_
 
     Args:
@@ -178,6 +179,28 @@ def matching_strategy_1(dboxes, bboxes, labels, offset_t, labels_t, idx, thresho
     labels_t[idx]                        = labels[matched_idx]
     labels_t[idx][matched_overlap < threshold] = 0
     offset_t[idx]                        =  encode_variance(dboxes, yolo_style(bboxes[matched_idx]))
+
+def matching_strategy_2(dboxes, bboxes, labels, bboxes_t, labels_t, idx, threshold=0.5, get_encode=True):
+    """_summary_
+
+    Args:
+        dboxes : [8732, 4] [cx, cy, w, h]
+        bboxes : [nbox, 4] [xmin, ymin, xmax, ymax]
+        labels : [nbox]
+        các tham số còn lại là truyền vào để gán
+    """
+    overlaps = jaccard(bboxes, pascalVOC_style(dboxes))
+
+    _, best_dboxes_idx            = overlaps.max(dim=1, keepdim=False)
+    matched_overlap, matched_idx  = overlaps.max(dim=0, keepdim=False)
+
+    for i in range(best_dboxes_idx.size(0)):
+        matched_idx[best_dboxes_idx[i]] = i
+
+    matched_overlap.index_fill_(dim=0, index=best_dboxes_idx, value=1) # đảm bảo rằng giữ lại các box đã được match sau bước phía dưới
+    labels_t[idx]                        = labels[matched_idx]
+    labels_t[idx][matched_overlap < threshold] = 0
+    bboxes_t[idx]                        =  bboxes[matched_idx]
 
 class MultiBoxLoss(nn.Module):
     """
@@ -238,9 +261,35 @@ class MultiBoxLoss(nn.Module):
         loss_c = pos_loss_c + neg_loss_c
 
         return (loss_l + loss_c)/(num_pos.sum() + 1e-10)
+    
+def pairwise_jaccard(bboxes_a, bboxes_b):
+    b1_xmin = bboxes_a[:, 0]
+    b1_ymin = bboxes_a[:, 1]
+    b1_xmax = bboxes_a[:, 2]
+    b1_ymax = bboxes_a[:, 3]
+    b1_w    = b1_xmax - b1_xmin
+    b1_h    = b1_ymax - b1_ymin
+    b1_area = b1_w * b1_h
 
+    b2_xmin = bboxes_b[:, 0]
+    b2_ymin = bboxes_b[:, 1]
+    b2_xmax = bboxes_b[:, 2]
+    b2_ymax = bboxes_b[:, 3]
+    b2_w    = b2_xmax - b2_xmin
+    b2_h    = b2_ymax - b2_ymin
+    b2_area = b2_w * b2_h
 
-class MultiBox_Focal_Loss(nn.Module):
+    b3_xmin = torch.max(b1_xmin, b2_xmin)
+    b3_xmax = torch.min(b1_xmax, b2_xmax)
+    b3_ymin = torch.max(b1_ymin, b2_ymin)
+    b3_ymax = torch.min(b1_ymax, b2_ymax)
+    b3_w    = (b3_xmax - b3_xmin).clamp(0.)
+    b3_h    = (b3_ymax - b3_ymin).clamp(0.)
+    b3_area = b3_w * b3_h
+
+    return b3_area / (b1_area + b2_area - b3_area + 1e-7)
+    
+class MultiBox_CIoU_Loss(nn.Module):
     """
     Args:
         offset_p : [batch, 8732, 4] là offset được model dự đoán ra
@@ -248,46 +297,115 @@ class MultiBox_Focal_Loss(nn.Module):
         dboxes   : [batch, 8732, 4] [cx, cy, w, h] chuẩn hóa [0..1]
         targets  : [nbox, 5], 4 cái đầu là [xmin, ymin, xmax, ymax] chuẩn hóa [0..1], cái cuối là label 
     
+    Out :
+        loss = L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
     """
 
-    def __init__(self, num_classes, gamma=2, alpha=0.25):
+    def __init__(self, num_classes):
         super().__init__()
         self.num_classes = num_classes
-        self.gamma = torch.FloatTensor([gamma]).to("cuda")
-        self.alpha = torch.FloatTensor([alpha]).to("cuda")
+        self.alpha_l = 5.
+        self.alpha_c = 0.5
 
     def forward(self, offset_p, conf_p, dboxes, batch_bboxes, batch_labels):
 
         batch_size = offset_p.size(0)
         nbox       = offset_p.size(1)
-        offset_t = torch.Tensor(batch_size, nbox, 4).to("cuda")
+        bboxes_t = torch.Tensor(batch_size, nbox, 4).to("cuda")
+        bboxes_p = torch.Tensor(batch_size, nbox, 4).to("cuda")
         labels_t = torch.LongTensor(batch_size, nbox).to("cuda")
 
         for idx in range(batch_size):
             bboxes    = batch_bboxes[idx]
             labels    = batch_labels[idx]
-            matching_strategy_1(dboxes, bboxes, labels, offset_t, labels_t, idx)
+            matching_strategy_2(dboxes, bboxes, labels, bboxes_t, labels_t, idx)
+            bboxes_p[idx] = pascalVOC_style(decode_variance(dboxes, offset_p[idx]))
 
         pos_mask = (labels_t != 0)
         neg_mask = (labels_t == 0)
 
-        #location loss
-        loss_l = F.smooth_l1_loss(offset_p[pos_mask], offset_t[pos_mask], reduction="sum")
+        #location loss : CIoU
+        eps = 1e-7
+
+        bboxes_t = bboxes_t[pos_mask]
+        bboxes_p = bboxes_p[pos_mask]
+
+        b1_xmin  = bboxes_t[:, 0]
+        b1_ymin  = bboxes_t[:, 1]
+        b1_xmax  = bboxes_t[:, 2]
+        b1_ymax  = bboxes_t[:, 3]
+        b1_w     = b1_xmax - b1_xmin 
+        b1_h     = b1_ymax - b1_ymin + eps
+
+        b2_xmin  = bboxes_p[:, 0]
+        b2_ymin  = bboxes_p[:, 1]
+        b2_xmax  = bboxes_p[:, 2]
+        b2_ymax  = bboxes_p[:, 3]
+        b2_w     = b2_xmax - b2_xmin 
+        b2_h     = b2_ymax - b2_ymin + eps
+
+        IoU = pairwise_jaccard(bboxes_p, bboxes_t)
+        if (torch.isnan(IoU).any()):
+            print("IoU")
+            sys.exit()
+
+        cw  = torch.max(b1_xmax, b2_xmax) - torch.min(b1_xmin, b2_xmin)
+        ch  = torch.max(b1_ymax, b2_ymax) - torch.min(b1_ymin, b2_ymin)
+
+        c2   = cw ** 2 + ch ** 2 + eps
+        if (torch.isnan(c2).any()):
+            print("c2")
+            sys.exit()
+
+
+        rho2 = ((b1_xmax + b1_xmin - b2_xmax - b2_xmin)**2 - (b1_ymax + b1_ymin - b2_ymax - b2_ymin)**2)/4
+        if (torch.isnan(rho2).any()):
+            print("rho2")
+            sys.exit()
+
+
+        v    = (4 / math.pi ** 2) * (torch.atan(b2_w / b2_h) - torch.atan(b1_w / b1_h)).pow(2)
+        if (torch.isnan(v).any()):
+            print("v")
+            sys.exit()
+
+        with torch.no_grad():
+            alpha = v / (v - IoU + (1 + eps))
+        if (torch.isnan(alpha).any()):
+            print("alpha")
+            sys.exit()
+
+        loss_l = 1.0 - IoU + rho2 / c2 + v * alpha
+        loss_l = torch.sum(loss_l) * self.alpha_l
 
         #confidence loss
+        #hard negative mining
         num_pos = pos_mask.sum(dim=1)
+        num_neg = torch.clamp(3*num_pos, max=nbox)
 
-        num_classes = conf_p.size(2)
-        mask        = torch.zeros(batch_size, nbox, num_classes).to("cuda")
-        mask.scatter_(2, labels_t.unsqueeze(2), 1.)
+        conf_loss = F.cross_entropy(conf_p.view(-1, self.num_classes), labels_t.view(-1), reduction="none")
+        conf_loss = conf_loss.view(batch_size, nbox)
+
+        #print(conf_loss.shape)
+        #print(pos_mask.shape)
+        #print(conf_loss[pos_mask].sum())
+        #sys.exit()
+        #print(pos_mask.any())
         
-        conf_p = F.softmax(conf_p, dim=2)
-        
-        loss_c = -self.alpha*mask*torch.pow((1 - conf_p), self.gamma)*torch.log(conf_p + 1e-10)
+        pos_loss_c          = conf_loss[pos_mask].sum()
+        conf_loss           = conf_loss.clone()
 
-        return (loss_l + loss_c.sum())/(num_pos.sum() + 1e-10)
+        conf_loss[pos_mask] = 0
+        _, idx              = torch.sort(conf_loss, dim=1, descending=True)
+        _, idx              = torch.sort(idx, dim=1)
+        neg_mask            = idx < num_neg.unsqueeze(-1)
+        neg_loss_c          = conf_loss[neg_mask].sum()
+        loss_c = (pos_loss_c + neg_loss_c) * self.alpha_c
 
+        #print(torch.max(v).item(), torch.max(IoU).item())
+        print(loss_c.item(), loss_l.item())
 
+        return (loss_l + loss_c)/(num_pos.sum() + 1e-10)
 
 def nms(bboxes, conf, conf_threshold=0.01, iou_threshold=0.45):
     #"""

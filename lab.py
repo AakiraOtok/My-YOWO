@@ -20,3 +20,17 @@
 
     #dataset = UCF_dataset(root_path, split_path, data_path, ann_path, clip_length, sampling_rate)
     #print(len(dataset))
+
+#from model.MyYOWO import MyYOWO
+
+#model = MyYOWO()
+
+#total_params = sum(p.numel() for p in model.parameters())
+#print("Total parameters:", total_params)
+
+import torch 
+
+a = torch.tensor([-1, 1, 1])
+b = torch.tensor([-2, 1, 2])
+c = (a + b).clamp(0.)
+print(c)
