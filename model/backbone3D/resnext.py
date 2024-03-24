@@ -152,7 +152,7 @@ class ResNeXt(nn.Module):
         
         return out, x
     
-    def load_pretrain(self, pretrain_path="/home/manh/checkpoint/resnext-101-kinetics.pth"):
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/resnext-101-kinetics.pth'):
         
         state_dict = self.state_dict()
 

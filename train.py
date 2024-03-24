@@ -49,10 +49,12 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
             optimizer.step()
 
             print("epoch : {}, iteration : {}, time = {}, loss = {}".format(cur_epoch, iteration + 1, round(time.time() - t_batch, 2), loss))
+            if iteration % 10000 == 0:
+                torch.save(model.state_dict(), r"/home/manh/checkpoint/iteration_" + str(iteration) + ".pth")
 
         if cur_epoch in adjustlr_schedule:
             for param_group in optimizer.param_groups: 
-                param_group['lr'] *= 0.1
+                param_group['lr'] *= 0.5
 
         torch.save(model.state_dict(), r"/home/manh/checkpoint/epoch_" + str(cur_epoch) + ".pth")
         print("Saved model at epoch : {}".format(cur_epoch))
@@ -60,7 +62,7 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
 from model.MyYOWO import MyYOWO
-from utils.box_utils import MultiBoxLoss
+from utils.box_utils import MultiBoxLoss, MultiBox_CIoU_Loss
 
 def train_on_UCF(size = 300, version = "original", pretrain_path = None):
     root_path = "/home/manh/Datasets/UCF101-24/ucf242"
@@ -78,7 +80,8 @@ def train_on_UCF(size = 300, version = "original", pretrain_path = None):
     
     model = MyYOWO(n_classes = 25)
     
-    criterion = MultiBoxLoss(num_classes=25)
+    criterion = MultiBox_CIoU_Loss(num_classes=25)
+    #criterion = MultiBoxLoss(num_classes=25)
 
     return dataloader, model, criterion
 
@@ -94,6 +97,6 @@ if __name__ == "__main__":
             else:
                 not_biases.append(param)
 
-    optimizer  = optim.SGD(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr=1e-3, momentum=0.9, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr=1e-3, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), max_epoch=9)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 4, 5, 6), max_epoch=9)

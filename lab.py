@@ -33,3 +33,15 @@ if __name__ == "__main__":
 
 
 
+<<<<<<< HEAD
+=======
+    #dataset = UCF_dataset(root_path, split_path, data_path, ann_path, clip_length, sampling_rate)
+    #print(len(dataset))
+
+#from model.MyYOWO import MyYOWO
+
+#model = MyYOWO()
+
+#total_params = sum(p.numel() for p in model.parameters())
+#print("Total parameters:", total_params)
+>>>>>>> 84ea1e708d7311cf827a82a6570d032c44e740e0
