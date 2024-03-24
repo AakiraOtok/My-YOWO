@@ -277,6 +277,17 @@ class UnionMoudle(nn.Module):
 
         return out
     
+    def init_conv3d(self):
+        """
+        Initialize convolution parameters.
+        """
+        for c in self.children():
+            if isinstance(c, nn.Conv3d):
+                nn.init.xavier_uniform_(c.weight)
+                if c.bias is not None:
+                    nn.init.constant_(c.bias, 0.)
+
+    
 class MyYOWO(nn.Module):
 
     def __init__(self, pretrain_path = None, data_train_on = "VOC", n_classes = 21):
@@ -298,6 +309,8 @@ class MyYOWO(nn.Module):
         else:
             self.base_net2D.load_pretrain()
             self.base_net3D.load_pretrain()
+            self.unionModule1.init_conv3d()
+            self.unionModule2.init_conv3d()
             self.auxi_conv.init_conv2d()
             self.fp_conv.init_conv2d()
             self.pred_conv.init_conv2d()

@@ -287,7 +287,7 @@ def pairwise_jaccard(bboxes_a, bboxes_b):
     b3_h    = (b3_ymax - b3_ymin).clamp(0.)
     b3_area = b3_w * b3_h
 
-    return b3_area / (b1_area + b2_area - b3_area + 1e-7)
+    return b3_area / (b1_area + b2_area - b3_area + 1e-10)
     
 class MultiBox_CIoU_Loss(nn.Module):
     """
@@ -318,17 +318,41 @@ class MultiBox_CIoU_Loss(nn.Module):
         for idx in range(batch_size):
             bboxes    = batch_bboxes[idx]
             labels    = batch_labels[idx]
+
             matching_strategy_2(dboxes, bboxes, labels, bboxes_t, labels_t, idx)
-            bboxes_p[idx] = pascalVOC_style(decode_variance(dboxes, offset_p[idx]))
+            if (torch.isnan(offset_p[idx]).any()):
+                print("offset_p")
+                sys.exit()
+
+            if (torch.isnan(dboxes).any()):
+                print("dboxes")
+                sys.exit()
+
+            bboxes_p[idx] = decode_variance(dboxes, offset_p[idx])
+            if (torch.isnan(bboxes_p[idx]).any()):
+                print("decode")
+                sys.exit()
+
+            bboxes_p[idx] = pascalVOC_style(bboxes_p[idx])
+            if (torch.isnan(bboxes_p[idx]).any()):
+                print("pascalVOC_style")
+                sys.exit()
 
         pos_mask = (labels_t != 0)
         neg_mask = (labels_t == 0)
 
         #location loss : CIoU
-        eps = 1e-7
+        eps = 1e-10
 
         bboxes_t = bboxes_t[pos_mask]
+        if (torch.isnan(bboxes_t).any()):
+            print("bboxes_t")
+            sys.exit()
+
         bboxes_p = bboxes_p[pos_mask]
+        if (torch.isnan(bboxes_p).any()):
+            print("bboxes_p")
+            sys.exit()
 
         b1_xmin  = bboxes_t[:, 0]
         b1_ymin  = bboxes_t[:, 1]

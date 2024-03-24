@@ -49,10 +49,12 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
             optimizer.step()
 
             print("epoch : {}, iteration : {}, time = {}, loss = {}".format(cur_epoch, iteration + 1, round(time.time() - t_batch, 2), loss))
+            if iteration % 10000 == 0:
+                torch.save(model.state_dict(), r"/home/manh/checkpoint/iteration_" + str(iteration) + ".pth")
 
         if cur_epoch in adjustlr_schedule:
             for param_group in optimizer.param_groups: 
-                param_group['lr'] *= 0.1
+                param_group['lr'] *= 0.5
 
         torch.save(model.state_dict(), r"/home/manh/checkpoint/epoch_" + str(cur_epoch) + ".pth")
         print("Saved model at epoch : {}".format(cur_epoch))
@@ -97,4 +99,4 @@ if __name__ == "__main__":
 
     optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr=1e-3, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), max_epoch=9)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 4, 5, 6), max_epoch=9)
