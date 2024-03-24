@@ -65,15 +65,16 @@ def detect(dataset, model, num_classes=21, mapping=UCF101_idx2name):
         pred_bboxes, pred_labels, pred_confs = Non_Maximum_Suppression(dboxes, offset[0], conf[0], conf_threshold=0.3, iou_threshold=0.45, top_k=200, num_classes=num_classes)
 
         draw_bounding_box(origin_image, pred_bboxes, pred_labels, pred_confs, mapping)
-        cv2.imshow("img", origin_image)
-        k = cv2.waitKey()
-        if (k == ord('q')):
-            break
-        #cv2.imwrite(r"H:\test_img\_" + str(idx) + r".jpg", origin_image)
-        print("ok")
+        #cv2.imshow("img", origin_image)
+        #k = cv2.waitKey()
+        #if (k == ord('q')):
+            #break
+        cv2.imwrite(r"H:\detect_images\idx_" + str(idx) + r".jpg", origin_image)
+        #print("ok")
+        print("image {} saved!".format(idx))
 
 def detect_on_UCF101(size=300, version="original", pretrain_path=None):
-    root_path = "/home/manh/Datasets/UCF101-24/ucf242"
+    root_path = r"H:\Datasets\ucf24"
     split_path = "testlist.txt"
     data_path = "rgb-images"
     ann_path = "labels"
@@ -91,7 +92,7 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
 
 
 if __name__ == "__main__":
-    pretrain_path = "/home/manh/checkpoint/iteration_23000.pth"
+    pretrain_path = r"H:\checkpoint\epoch_5.pth"
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()
