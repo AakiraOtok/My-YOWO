@@ -55,8 +55,8 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
                 print("epoch : {}, update : {}, time = {}, loss = {}".format(cur_epoch,  cnt_pram_update, round(time.time() - t_batch, 2), loss_acc))
                 loss_acc = 0.0
-                if cnt_pram_update % 1000 == 0:
-                    torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/update_" + str(cnt_pram_update) + ".pth")
+                if cnt_pram_update % 100 == 0:
+                    torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_{}_update_".format(cur_epoch) + str(cnt_pram_update) + ".pth")
 
         if cur_epoch in adjustlr_schedule:
             for param_group in optimizer.param_groups: 
