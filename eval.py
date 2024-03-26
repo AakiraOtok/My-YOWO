@@ -206,7 +206,7 @@ def eval_on_UCF101(pretrain_path, size=300):
 
 if __name__ == "__main__":
 
-    pretrain_path = "/home/manh/checkpoint/epoch_9.pth"
+    pretrain_path = "/home/manh/checkpoint/epoch_6.pth"
     size          = 300
     num_classes   = 25
 

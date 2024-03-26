@@ -147,19 +147,16 @@ class DarkFPN(torch.nn.Module):
         return h2, h4, h6
 
 class YOLO(torch.nn.Module):
-    def __init__(self, width, depth, pretrain_path = None):
+    def __init__(self, width, depth):
         super().__init__()
         self.net = DarkNet(width, depth)
         self.fpn = DarkFPN(width, depth)
-        if pretrain_path is not None:
-            self.load_pretrain(pretrain_path)
 
     def forward(self, x):
-        print(x.shape)
         x = self.net(x)
-        print(x[0].shape, x[1].shape, x[2].shape)
         x = self.fpn(x)
-        print(x[0].shape, x[1].shape, x[2].shape)
+        return x
+
 
     def fuse(self):
         for m in self.modules():
@@ -169,12 +166,11 @@ class YOLO(torch.nn.Module):
                 delattr(m, 'norm')
         return self
     
-    def load_pretrain(self, pretrain_path = None):
+    def load_pretrain(self, pretrain_path = "/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth"):
         state_dict = self.state_dict()
 
         pretrain_state_dict = torch.load(pretrain_path)
         
-        print("ok")
         for param_name, value in pretrain_state_dict.items():
             if param_name not in state_dict:
                 continue
@@ -194,10 +190,10 @@ def yolo_v8_s(pretrain_path = None):
     return YOLO(width, depth)
 
 
-def yolo_v8_m(pretrain_path = "/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth"):
+def yolo_v8_m(pretrain_path = None):
     depth = [2, 4, 4]
     width = [3, 48, 96, 192, 384, 576]
-    return YOLO(width, depth, pretrain_path=pretrain_path)
+    return YOLO(width, depth)
 
 
 def yolo_v8_l(pretrain_path = None):

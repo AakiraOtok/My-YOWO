@@ -23,7 +23,7 @@ def UCF_collate_fn(batch_data):
 
 class UCF_dataset(data.Dataset):
 
-    def __init__(self, root_path, split_path, data_path, ann_path, clip_length, sampling_rate, transform=transforms.UCF_transform()):
+    def __init__(self, root_path, split_path, data_path, ann_path, clip_length, sampling_rate, transform=transforms.UCF_transform(), img_size=(224, 224)):
         self.root_path     = root_path                                        # path to root folder
         self.split_path    = os.path.join(root_path, split_path)              # path to split file
         self.data_path     = os.path.join(root_path, data_path)               # path to data folder
@@ -36,6 +36,7 @@ class UCF_dataset(data.Dataset):
             self.lines = f.readlines()
 
         self.nSample       = len(self.lines)
+        self.img_size       = img_size
 
     def __len__(self):
         return self.nSample
@@ -64,7 +65,7 @@ class UCF_dataset(data.Dataset):
             cur_frame_path = os.path.join(video_path, '{:05d}.jpg'.format(cur_frame_idx))
             cur_frame      = cv2.imread(cur_frame_path)/255.0
             H, W, C        = cur_frame.shape
-            cur_frame      = cv2.resize(cur_frame, (300, 300))
+            cur_frame      = cv2.resize(cur_frame, self.img_size)
             clip.append(cur_frame)
 
         if get_origin_image == True:

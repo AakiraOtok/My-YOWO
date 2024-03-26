@@ -304,8 +304,8 @@ class MultiBox_CIoU_Loss(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
         self.num_classes = num_classes
-        self.alpha_l = 5.
-        self.alpha_c = 0.5
+        self.alpha_l = 3.
+        self.alpha_c = 1.
 
     def forward(self, offset_p, conf_p, dboxes, batch_bboxes, batch_labels):
 
@@ -320,23 +320,10 @@ class MultiBox_CIoU_Loss(nn.Module):
             labels    = batch_labels[idx]
 
             matching_strategy_2(dboxes, bboxes, labels, bboxes_t, labels_t, idx)
-            if (torch.isnan(offset_p[idx]).any()):
-                print("offset_p")
-                sys.exit()
-
-            if (torch.isnan(dboxes).any()):
-                print("dboxes")
-                sys.exit()
 
             bboxes_p[idx] = decode_variance(dboxes, offset_p[idx])
-            if (torch.isnan(bboxes_p[idx]).any()):
-                print("decode")
-                sys.exit()
 
             bboxes_p[idx] = pascalVOC_style(bboxes_p[idx])
-            if (torch.isnan(bboxes_p[idx]).any()):
-                print("pascalVOC_style")
-                sys.exit()
 
         pos_mask = (labels_t != 0)
         neg_mask = (labels_t == 0)
@@ -345,14 +332,8 @@ class MultiBox_CIoU_Loss(nn.Module):
         eps = 1e-10
 
         bboxes_t = bboxes_t[pos_mask]
-        if (torch.isnan(bboxes_t).any()):
-            print("bboxes_t")
-            sys.exit()
 
         bboxes_p = bboxes_p[pos_mask]
-        if (torch.isnan(bboxes_p).any()):
-            print("bboxes_p")
-            sys.exit()
 
         b1_xmin  = bboxes_t[:, 0]
         b1_ymin  = bboxes_t[:, 1]
@@ -369,35 +350,19 @@ class MultiBox_CIoU_Loss(nn.Module):
         b2_h     = b2_ymax - b2_ymin + eps
 
         IoU = pairwise_jaccard(bboxes_p, bboxes_t)
-        if (torch.isnan(IoU).any()):
-            print("IoU")
-            sys.exit()
 
         cw  = torch.max(b1_xmax, b2_xmax) - torch.min(b1_xmin, b2_xmin)
         ch  = torch.max(b1_ymax, b2_ymax) - torch.min(b1_ymin, b2_ymin)
 
         c2   = cw ** 2 + ch ** 2 + eps
-        if (torch.isnan(c2).any()):
-            print("c2")
-            sys.exit()
 
 
         rho2 = ((b1_xmax + b1_xmin - b2_xmax - b2_xmin)**2 - (b1_ymax + b1_ymin - b2_ymax - b2_ymin)**2)/4
-        if (torch.isnan(rho2).any()):
-            print("rho2")
-            sys.exit()
-
 
         v    = (4 / math.pi ** 2) * (torch.atan(b2_w / b2_h) - torch.atan(b1_w / b1_h)).pow(2)
-        if (torch.isnan(v).any()):
-            print("v")
-            sys.exit()
 
         with torch.no_grad():
             alpha = v / (v - IoU + (1 + eps))
-        if (torch.isnan(alpha).any()):
-            print("alpha")
-            sys.exit()
 
         loss_l = 1.0 - IoU + rho2 / c2 + v * alpha
         loss_l = torch.sum(loss_l) * self.alpha_l
@@ -427,7 +392,6 @@ class MultiBox_CIoU_Loss(nn.Module):
         loss_c = (pos_loss_c + neg_loss_c) * self.alpha_c
 
         #print(torch.max(v).item(), torch.max(IoU).item())
-        print(loss_c.item(), loss_l.item())
 
         return (loss_l + loss_c)/(num_pos.sum() + 1e-10)
 
