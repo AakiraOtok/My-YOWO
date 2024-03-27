@@ -23,6 +23,7 @@ from model.MyYOWO import MyYOWO
 from utils.box_utils import MultiBoxLoss, Non_Maximum_Suppression, draw_bounding_box
 from utils.box_utils import Non_Maximum_Suppression, jaccard
 from tqdm import tqdm
+from model.superYOWO import superYOWO
 
 def voc_ap(rec, prec, use_07_metric=True):
     """ ap = voc_ap(rec, prec, [use_07_metric])
@@ -184,12 +185,12 @@ def calc_APs(model, dataset, threshold=0.5, num_classes=21):
             #APs[cur_class] = torch.trapz(precision, recall)
             APs[cur_class] = voc_ap(recall, precision)
             
-            #plt.plot(recall.detach().cpu().numpy(), precision.detach().cpu().numpy())
-            #plt.show()
+            plt.plot(recall.detach().cpu().numpy(), precision.detach().cpu().numpy())
+            plt.show()
 
         return APs
 
-def eval_on_UCF101(pretrain_path, size=300):
+def eval_on_UCF101(pretrain_path, size=(224, 224)):
     root_path = "/home/manh/Datasets/UCF101-24/ucf242"
     split_path = "testlist.txt"
     data_path = "rgb-images"
@@ -200,14 +201,15 @@ def eval_on_UCF101(pretrain_path, size=300):
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
                           , clip_length, sampling_rate)
 
-    model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
+    #model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
+    model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
         
     return dataset, model
 
 if __name__ == "__main__":
 
-    pretrain_path = "/home/manh/checkpoint/epoch_6.pth"
-    size          = 300
+    pretrain_path = "/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_7.pth"
+    size          = (224, 224)
     num_classes   = 25
 
     dataset, model = eval_on_UCF101(pretrain_path=pretrain_path, size=size)

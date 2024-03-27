@@ -20,23 +20,27 @@ from model.backbone2D.YOLOv8 import yolo_v8_m
 
 from math import sqrt
 
+class ConvBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size=(3, 3), stride=1, padding=0, groups=1, bias=False):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, groups=groups, bias=bias)
+        self.bn   = nn.BatchNorm2d(out_channels)
+        self.relu = nn.SiLU(inplace=True)
+
+    def forward(self, ft):
+        return self.relu(self.bn(self.conv(ft)))
+
+
 class SeparatorBlock(nn.Module):
 
     def __init__(self, inchannels, outchannels):
         super().__init__()
-        self.dw_conv = nn.Conv2d(inchannels, inchannels, kernel_size=3, padding=1, groups=inchannels, bias=False)
-        self.bn1     = nn.BatchNorm2d(inchannels)
-        self.silu1   = nn.SiLU(inplace=True)
+        self.block1  = ConvBlock(inchannels, inchannels, 3, padding=1, groups=inchannels, bias=False)
+        self.block2  = ConvBlock(inchannels, outchannels, 1, bias=False)
 
-        self.pw_conv = nn.Conv2d(inchannels, outchannels, kernel_size=1, bias=False)
-        self.bn2     = nn.BatchNorm2d(outchannels)
-        self.silu2   = nn.SiLU(inplace=True)
-
-    
     def forward(self, ft):
-        out = self.silu1(self.bn1(self.dw_conv(ft)))
-        out = self.silu2(self.bn2(self.pw_conv(out)))
-        return out
+        return self.block2(self.block1(ft))
 
 class Fusion_Module(nn.Module):
 
@@ -71,15 +75,15 @@ class Detect_Head(nn.Module):
     def __init__(self, num_classes, inchannels=512, num_Box=6):
         super().__init__()
         self.box = nn.Sequential(
-            nn.Conv2d(inchannels, 1024, kernel_size=3, padding=1),
-            nn.Conv2d(1024, 512, kernel_size=3, padding=1),
-            nn.Conv2d(512, num_Box * 4, kernel_size=1)
+            ConvBlock(inchannels, 1024, 3, padding=1),
+            ConvBlock(1024, 512, 3, padding=1),
+            ConvBlock(512, num_Box * 4, kernel_size=1)
         ) 
 
         self.cls = nn.Sequential(
-            nn.Conv2d(inchannels, 1024, kernel_size=3, padding=1),
-            nn.Conv2d(1024, 512, kernel_size=3, padding=1),
-            nn.Conv2d(512, num_Box * num_classes, kernel_size=1)
+            ConvBlock(inchannels, 1024, 3, padding=1),
+            ConvBlock(1024, 512, 3, padding=1),
+            ConvBlock(512, num_Box * num_classes, kernel_size=1)
         )
         self.num_classes = num_classes
 

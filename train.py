@@ -55,7 +55,7 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
                 print("epoch : {}, update : {}, time = {}, loss = {}".format(cur_epoch,  cnt_pram_update, round(time.time() - t_batch, 2), loss_acc))
                 loss_acc = 0.0
-                if cnt_pram_update % 100 == 0:
+                if cnt_pram_update % 500 == 0:
                     torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_{}_update_".format(cur_epoch) + str(cnt_pram_update) + ".pth")
 
         if cur_epoch in adjustlr_schedule:
@@ -84,7 +84,7 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = superYOWO(num_classes = 25)
+    model = superYOWO(num_classes = 25, pretrain_path=pretrain_path)
     
     criterion = MultiBox_CIoU_Loss(num_classes=25)
     #criterion = MultiBoxLoss(num_classes=25)
@@ -103,6 +103,6 @@ if __name__ == "__main__":
             else:
                 not_biases.append(param)
 
-    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-4}, {'params' : not_biases}], lr=1e-4, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr= 1e-3, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4), max_epoch=5)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4, 5), max_epoch=7)
