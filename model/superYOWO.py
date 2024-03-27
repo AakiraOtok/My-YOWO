@@ -77,13 +77,13 @@ class Detect_Head(nn.Module):
         self.box = nn.Sequential(
             ConvBlock(inchannels, 1024, 3, padding=1),
             ConvBlock(1024, 512, 3, padding=1),
-            ConvBlock(512, num_Box * 4, kernel_size=1)
+            nn.Conv2d(512, num_Box * 4, kernel_size=1)
         ) 
 
         self.cls = nn.Sequential(
             ConvBlock(inchannels, 1024, 3, padding=1),
             ConvBlock(1024, 512, 3, padding=1),
-            ConvBlock(512, num_Box * num_classes, kernel_size=1)
+            nn.Conv2d(512, num_Box * num_classes, kernel_size=1)
         )
         self.num_classes = num_classes
 
