@@ -22,6 +22,7 @@ from math import sqrt
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
 from model.MyYOWO import MyYOWO
 from utils.box_utils import MultiBoxLoss, Non_Maximum_Suppression, draw_bounding_box
+from model.superYOWO import superYOWO
 
 UCF101_idx2name = {
     1  : "Baseketball",
@@ -83,7 +84,8 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
                           , clip_length, sampling_rate)
 
-    model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
+    #model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
+    model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
         
     num_classes = 25
     mapping = UCF101_idx2name
@@ -91,7 +93,7 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
 
 
 if __name__ == "__main__":
-    pretrain_path = "/home/manh/checkpoint/iteration_23000.pth"
+    pretrain_path = "/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_1_update_2500.pth"
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()

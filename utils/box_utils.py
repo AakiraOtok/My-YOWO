@@ -370,7 +370,7 @@ class MultiBox_CIoU_Loss(nn.Module):
         #confidence loss
         #hard negative mining
         num_pos = pos_mask.sum(dim=1)
-        num_neg = torch.clamp(3*num_pos, max=nbox)
+        num_neg = torch.clamp(2 * num_pos, max=nbox)
 
         conf_loss = F.cross_entropy(conf_p.view(-1, self.num_classes), labels_t.view(-1), reduction="none")
         conf_loss = conf_loss.view(batch_size, nbox)
@@ -391,7 +391,7 @@ class MultiBox_CIoU_Loss(nn.Module):
         neg_loss_c          = conf_loss[neg_mask].sum()
         loss_c = (pos_loss_c + neg_loss_c) * self.alpha_c
 
-        #print(torch.max(v).item(), torch.max(IoU).item())
+        #print(loss_c.item(), loss_l.item())
 
         return (loss_l + loss_c)/(num_pos.sum() + 1e-10)
 

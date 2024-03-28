@@ -75,15 +75,13 @@ class Detect_Head(nn.Module):
     def __init__(self, num_classes, inchannels=512, num_Box=6):
         super().__init__()
         self.box = nn.Sequential(
-            ConvBlock(inchannels, 1024, 3, padding=1),
-            ConvBlock(1024, 512, 3, padding=1),
-            nn.Conv2d(512, num_Box * 4, kernel_size=1)
+            ConvBlock(inchannels, 256, 3, padding=1),
+            nn.Conv2d(256, num_Box * 4, kernel_size=3, padding=1)
         ) 
 
         self.cls = nn.Sequential(
-            ConvBlock(inchannels, 1024, 3, padding=1),
-            ConvBlock(1024, 512, 3, padding=1),
-            nn.Conv2d(512, num_Box * num_classes, kernel_size=1)
+            ConvBlock(inchannels, 256, 3, padding=1),
+            nn.Conv2d(256, num_Box * num_classes, kernel_size=3, padding=1)
         )
         self.num_classes = num_classes
 
@@ -150,8 +148,7 @@ class superYOWO(nn.Module):
         # "For SSD512 model, we add extra conv12 2 for prediction, set smin to 0.15, and 0.07 on conv4 3...""
 
 
-        box_scales    = [0.1, 0.2, 0.375, 0.55, 0.725, 0.9] 
-
+        box_scales    = [0.375, 0.55, 0.725] 
         
             
         aspect_ratios = [
