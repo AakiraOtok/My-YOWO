@@ -45,12 +45,12 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
             loss = criterion(loc, conf, dboxes, batch_bboxes, batch_labels) / acc_grad
             loss_acc += loss.item()
-            loss.backward()
+            #loss.backward()
 
             if (iteration + 1) % acc_grad == 0:
                 cnt_pram_update = cnt_pram_update + 1
                 nn.utils.clip_grad_value_(model.parameters(), clip_value=2.0)
-                optimizer.step()
+                #optimizer.step()
                 optimizer.zero_grad()
 
                 print("epoch : {}, update : {}, time = {}, loss = {}".format(cur_epoch,  cnt_pram_update, round(time.time() - t_batch, 2), loss_acc))
@@ -72,7 +72,7 @@ from utils.box_utils import MultiBoxLoss, MultiBox_CIoU_Loss
 
 def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = None):
     root_path = "/home/manh/Datasets/UCF101-24/ucf242"
-    split_path = "trainlist.txt"
+    split_path = "testlist.txt"
     data_path = "rgb-images"
     ann_path = "labels"
     clip_length = 16
@@ -92,7 +92,7 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = None
+    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_5_update_500.pth'
     dataloader, model, criterion = train_on_UCF(version="original", img_size=(224, 224), pretrain_path=pretrain_path)
     biases     = []
     not_biases = []
