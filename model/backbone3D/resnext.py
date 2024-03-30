@@ -30,7 +30,7 @@ class ResNeXtBottleneck(nn.Module):
         super(ResNeXtBottleneck, self).__init__()
         mid_planes = cardinality * int(planes / 32)
         self.conv1 = nn.Conv3d(inplanes, mid_planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm3d(mid_planes)
+        self.bn1 = nn.BatchNorm3d(mid_planes, 0.001, 0.03)
         self.conv2 = nn.Conv3d(
             mid_planes,
             mid_planes,
@@ -39,10 +39,10 @@ class ResNeXtBottleneck(nn.Module):
             padding=1,
             groups=cardinality,
             bias=False)
-        self.bn2 = nn.BatchNorm3d(mid_planes)
+        self.bn2 = nn.BatchNorm3d(mid_planes, 0.001, 0.03)
         self.conv3 = nn.Conv3d(
             mid_planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm3d(planes * self.expansion)
+        self.bn3 = nn.BatchNorm3d(planes * self.expansion, 0.001, 0.03)
         self.relu = nn.SiLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -86,7 +86,7 @@ class ResNeXt(nn.Module):
             stride=(1, 2, 2),
             padding=(3, 3, 3),
             bias=False)
-        self.bn1 = nn.BatchNorm3d(64)
+        self.bn1 = nn.BatchNorm3d(64, 0.001, 0.03)
         self.relu = nn.SiLU(inplace=True)
         
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
@@ -156,9 +156,6 @@ class ResNeXt(nn.Module):
 
         if x.size(2) == 2:
             x = self.avgpool(x)
-
-        if x.shape[2] == 1:
-            x = x.squeeze(2)
 
         return x
 

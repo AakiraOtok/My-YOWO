@@ -20,9 +20,10 @@ import glob
 from math import sqrt
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.MyYOWO import MyYOWO
-from utils.box_utils import MultiBoxLoss, Non_Maximum_Suppression, draw_bounding_box
-from model.superYOWO import superYOWO
+from model.YOLO2Stream import YOLO2Stream
+from utils.box_utils import draw_bounding_box
+from utils.util import non_max_suppression
+from model.YOLO2Stream import superYOWO
 
 UCF101_idx2name = {
     1  : "Baseketball",
@@ -60,12 +61,9 @@ def detect(dataset, model, num_classes=21, mapping=UCF101_idx2name):
         origin_image, clip, bboxes, labels = dataset.__getitem__(idx, get_origin_image=True)
 
         clip = clip.unsqueeze(0).to("cuda")
-        offset, conf = model(clip)
-        offset = offset.to("cuda")
-        conf   = conf.to("cuda")
-        pred_bboxes, pred_labels, pred_confs = Non_Maximum_Suppression(dboxes, offset[0], conf[0], conf_threshold=0.3, iou_threshold=0.45, top_k=200, num_classes=num_classes)
+        outputs = model(clip)
 
-        draw_bounding_box(origin_image, pred_bboxes, pred_labels, pred_confs, mapping)
+        draw_bounding_box(origin_image, outputs[:, :4], outputs[:, 4], outputs[:, 5], mapping)
         cv2.imshow("img", origin_image)
         k = cv2.waitKey()
         if (k == ord('q')):
@@ -85,15 +83,17 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
                           , clip_length, sampling_rate)
 
     #model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
-    model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
+    #model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
+    model = YOLO2Stream(num_classes=24, pretrain_path=pretrain_path)
+    
         
-    num_classes = 25
+    num_classes = 24
     mapping = UCF101_idx2name
     return dataset, model, num_classes, mapping
 
 
 if __name__ == "__main__":
-    pretrain_path = "/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_1_update_2500.pth"
+    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_1_update_500.pth'
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()

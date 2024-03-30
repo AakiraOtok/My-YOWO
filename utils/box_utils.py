@@ -60,16 +60,15 @@ def draw_bounding_box(image, bboxes, labels, confs, map_labels):
         image = image.detach().cpu().numpy()
     
     H, W, C = image.shape 
-    H -= 1
-    W -= 1
+
 
     if bboxes is not None:
         for box, label, conf in zip(bboxes, labels, confs):
             box = box.clone().detach()
-            box[0] = max(0, int(box[0]*W))
-            box[1] = max(0, int(box[1]*H))
-            box[2] = min(W, int(box[2]*W))
-            box[3] = min(H, int(box[3]*H))
+            box[0] = max(0, int(box[0]))
+            box[1] = max(0, int(box[1]))
+            box[2] = min(W, int(box[2]))
+            box[3] = min(H, int(box[3]))
             text    = str(map_labels[label.item()] + " : " + str(round(conf.item()*100, 2)))
             box_label(image, box, text)
         
@@ -494,3 +493,22 @@ def Non_Maximum_Suppression(dboxes, offset, conf, conf_threshold=0.01, iou_thres
 
     return pred_bboxes, pred_labels, pred_confs
 
+def make_anchors(x, strides, offset=0.5):
+    """
+    Generate anchors from features
+    """
+    assert x is not None
+    anchor_points, stride_tensor = [], []
+    for i, stride in enumerate(strides):
+        _, _, h, w = x[i].shape
+        sx = torch.arange(end=w, dtype=x[i].dtype, device=x[i].device) + offset  # shift x, [W]
+        sy = torch.arange(end=h, dtype=x[i].dtype, device=x[i].device) + offset  # shift y, [H]
+        
+
+        # [H, W]
+        sy, sx = torch.meshgrid(sy, sx, indexing='ij')
+
+        anchor_points.append(torch.stack((sx, sy), -1).view(-1, 2))
+        stride_tensor.append(torch.full((h * w, 1), stride, dtype=x[i].dtype, device=x[i].device))
+
+    return torch.cat(anchor_points), torch.cat(stride_tensor)

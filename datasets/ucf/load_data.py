@@ -81,7 +81,7 @@ class UCF_dataset(data.Dataset):
             lines = f.readlines()
             for i, line in enumerate(lines):
                 line = line.rstrip().split(' ')
-                label = int(line[0])
+                label = int(line[0]) - 1
                 labels.append(label)
                 box = [float(line[1])/W, float(line[2])/H, float(line[3])/W, float(line[4])/H] 
                 boxes.append(box)

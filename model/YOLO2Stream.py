@@ -1,9 +1,26 @@
-import math
-
 import torch
+import torch.utils.data as data
+import torch.nn as nn
+import torchvision
+import torchvision.transforms.functional as FT
+import torch.nn.functional as F
+import torch.optim as optim
 
-from utils.util import make_anchors, non_max_suppression
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+import xml.etree.ElementTree as ET
+import os
+import cv2
+import random
+import sys
+import glob
+from model.backbone3D.resnext import resnext101
+from model.backbone2D.YOLOv8 import yolo_v8_m
+from utils.box_utils import make_anchors
 
+from math import sqrt
+import math
 
 def pad(k, p=None, d=1):
     if d > 1:
@@ -112,6 +129,7 @@ class DarkNet(torch.nn.Module):
         p3 = self.p3(p2)
         p4 = self.p4(p3)
         p5 = self.p5(p4)
+
         return p3, p4, p5
 
 
@@ -146,8 +164,12 @@ class DFL(torch.nn.Module):
         self.conv.weight.data[:] = torch.nn.Parameter(x)
 
     def forward(self, x):
+        # x.shape = [B, 4 * n_dfl_channel, 1029]
         b, c, a = x.shape
+
+        # x.shape = [B, n_dfl_channel, 4, 1029]
         x = x.view(b, 4, self.ch, a).transpose(2, 1)
+
         return self.conv(x.softmax(1)).view(b, 4, a)
 
 
@@ -176,17 +198,28 @@ class Head(torch.nn.Module):
 
     def forward(self, x):
         for i in range(self.nl):
+            #print(self.box[i](x[i]).shape) [B, 4 * n_dfl_channel, H, W]
+            #print(self.cls[i](x[i]).shape) [B, nclass, H, W]
             x[i] = torch.cat((self.box[i](x[i]), self.cls[i](x[i])), 1)
         if self.training:
             return x
+        #                                     transpose !!!      return [1029, 2] and [1029, 1], 1029 = 28*28 + 14*14 + 7*7
         self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5))
 
+        # [B, nclass + 4 * n_dfl_channel, 1029]
         x = torch.cat([i.view(x[0].shape[0], self.no, -1) for i in x], 2)
-        box, cls = x.split((self.ch * 4, self.nc), 1)
+        
+        # [B, 4 * n_dfl_channel, 1029] [B, num_classes, 1029]
+        box, cls = x.split((self.ch * 4, self.nc), 1) 
+
+        # print(self.dfl(box).shape) = [B, 4, 1029] -> after decode
         a, b = torch.split(self.dfl(box), 2, 1)
         a = self.anchors.unsqueeze(0) - a
         b = self.anchors.unsqueeze(0) + b
         box = torch.cat(((a + b) / 2, b - a), 1)
+
+
+        #                 [B, 4, 1029]        [B, num_classes, 1029]
         return torch.cat((box * self.strides, cls.sigmoid()), 1)
 
     def initialize_biases(self):
@@ -196,25 +229,92 @@ class Head(torch.nn.Module):
         for a, b, s in zip(m.box, m.cls, m.stride):
             a[-1].bias.data[:] = 1.0  # box
             # cls (.01 objects, 80 classes, 640 img)
-            b[-1].bias.data[:m.nc] = math.log(5 / m.nc / (640 / s) ** 2)
+            b[-1].bias.data[:m.nc] = math.log(5 / m.nc / (224 / s) ** 2)
 
 
-class YOLO(torch.nn.Module):
-    def __init__(self, width, depth, num_classes):
+class Fusion_2D_3D(nn.Module):
+
+    def __init__(self, channels_2D, channels_3D):
+        super().__init__()
+
+        layers = []
+        for in_channels in channels_2D:
+            layers.append(CSP(in_ch=in_channels + channels_3D, out_ch=in_channels, n=3))
+
+        self.csp = nn.ModuleList(layers)
+
+    def forward(self, ft_2D, ft_3D):
+        _, C_3D, H_3D, W_3D = ft_3D.shape
+
+        fts = []
+
+        for idx, ft2D in enumerate(ft_2D):
+            _, C_2D, H_2D, W_2D = ft2D.shape
+            assert H_2D/H_3D == W_2D/W_3D, "can't upscale"
+
+            upsampling = nn.Upsample(scale_factor=H_2D/H_3D)
+            ft_3D_t = upsampling(ft_3D)
+            ft = torch.cat((ft_3D_t, ft2D), dim = 1)
+            fts.append(self.csp[idx](ft))
+        
+        return list(fts)
+    
+    def init_weights(self):
+        """
+        Initialize convolution parameters.
+        """
+        for c in self.children():
+            if isinstance(c, nn.Conv2d):
+                nn.init.xavier_uniform_(c.weight)
+                if c.bias is not None:
+                    nn.init.constant_(c.bias, 0.)
+
+
+
+class YOLO2Stream(torch.nn.Module):
+    def __init__(self, width, depth, num_classes, pretrain_path=None):
         super().__init__()
         self.net = DarkNet(width, depth)
+        self.net3D = resnext101()
+
+        dummy_img3D = torch.zeros(1, 3, 16, 224, 224)
+        dummy_img2D = torch.zeros(1, 3, 224, 224)
+
+        out_2D = self.net(dummy_img2D)
+        out_3D = self.net3D(dummy_img3D)
+
+        assert out_3D.shape[2] == 1, "output of 3D branch must have D = 1"
+
+        out_channels_2D = [x.shape[1] for x in out_2D]
+        out_channels_3D = out_3D.shape[1]
+
+        self.fusion = Fusion_2D_3D(out_channels_2D, out_channels_3D)
         self.fpn = DarkFPN(width, depth)
 
-        img_dummy = torch.zeros(1, 3, 256, 256)
-        self.head = Head(num_classes, (width[3], width[4], width[5]))
-        self.head.stride = torch.tensor([256 / x.shape[-2] for x in self.forward(img_dummy)])
-        self.stride = self.head.stride
-        self.head.initialize_biases()
+        self.detection_head = Head(num_classes, (width[3], width[4], width[5]))
+        self.detection_head.stride = torch.tensor([224 / x.shape[-2] for x in out_2D])
+        self.stride = self.detection_head.stride
+        self.detection_head.initialize_biases()
 
-    def forward(self, x):
-        x = self.net(x)
-        x = self.fpn(x)
-        return self.head(list(x))
+        if pretrain_path is not None:
+            self.load_state_dict(torch.load(pretrain_path))
+        else : 
+            self.load_pretrain()
+            self.net3D.load_pretrain()
+            self.fusion.init_weights()
+
+    def forward(self, clips):
+        key_frames = clips[:, :, -1, :, :]
+
+        ft_2D = self.net(key_frames)
+        ft_3D = self.net3D(clips).squeeze(2)
+        
+        ft = self.fusion(ft_2D, ft_3D)
+        ft = self.fpn(ft)
+
+        #     4 coordinate in absolute form, x_center, y_center, w, h, 
+        # [B, 4 + num_classes, 1029]
+        return self.detection_head(list(ft))
 
     def fuse(self):
         for m in self.modules():
@@ -223,61 +323,54 @@ class YOLO(torch.nn.Module):
                 m.forward = m.fuse_forward
                 delattr(m, 'norm')
         return self
+    
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth'):
+        state_dict = self.state_dict()
+
+        pretrain_state_dict = torch.load(pretrain_path)
+        
+        for param_name, value in pretrain_state_dict.items():
+            if param_name not in state_dict:
+                continue
+            state_dict[param_name] = value
+            
+        self.load_state_dict(state_dict)
 
 
 def yolo_v8_n(num_classes: int = 80):
     depth = [1, 2, 2]
     width = [3, 16, 32, 64, 128, 256]
-    return YOLO(width, depth, num_classes)
+    return YOLO2Stream(width, depth, num_classes)
 
 
 def yolo_v8_s(num_classes: int = 80):
     depth = [1, 2, 2]
     width = [3, 32, 64, 128, 256, 512]
-    return YOLO(width, depth, num_classes)
+    return YOLO2Stream(width, depth, num_classes)
 
 
 def yolo_v8_m(num_classes: int = 80):
     depth = [2, 4, 4]
     width = [3, 48, 96, 192, 384, 576]
-    return YOLO(width, depth, num_classes)
+    return YOLO2Stream(width, depth, num_classes)
 
 
 def yolo_v8_l(num_classes: int = 80):
     depth = [3, 6, 6]
     width = [3, 64, 128, 256, 512, 512]
-    return YOLO(width, depth, num_classes)
+    return YOLO2Stream(width, depth, num_classes)
 
 
 def yolo_v8_x(num_classes: int = 80):
     depth = [3, 6, 6]
     width = [3, 80, 160, 320, 640, 640]
-    return YOLO(width, depth, num_classes)
+    return YOLO2Stream(width, depth, num_classes)
 
-import cv2
+
 if __name__ == "__main__":
 
-    model = yolo_v8_m()
-    model.load_state_dict(torch.load('/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth'))
-    img = cv2.imread("/home/manh/Projects/My-YOWO/bui-anh-tuan-cover-love-song-tang-sinh-nhat-thay-ho-ngoc-ha.jpg")
-    img = cv2.resize(img, (256, 256)) / 255.0
-    img2 = img.copy()
-    img = torch.FloatTensor(img[:, :, (2, 1, 0)]).permute(2, 0, 1).contiguous().unsqueeze(0)
-
-    model.eval()
-    out = model(img)
-
-    out = non_max_suppression(out, conf_threshold=0.5, iou_threshold=0.5)[0]
-    
-    for idx in range(out.shape[0]):
-        img3 = img2.copy()
-        t = out[idx]
-        box = [int(max(t[0], 0)), int(min(t[1], 256)), int(max(t[2], 0)), int(min(t[3], 256))]
-        print(t[4])
-        print(t[5])
-        print()
-        cv2.rectangle(img3, (box[0], box[1]), (box[2], box[3]), 1, 1, 1)
-        cv2.imshow('img', img3)
-        k = cv2.waitKey()
-        if k == ord('q'):
-            break
+    model = yolo_v8_m(num_classes=25)
+    total_params = sum(p.numel() for p in model.parameters())
+    print("Tổng số lượng tham số của mô hình: ", total_params) 
+    dummy_img = torch.Tensor(1, 3, 16, 224, 224)
+    out = model(dummy_img)

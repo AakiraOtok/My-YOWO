@@ -25,8 +25,6 @@ def warmup_learning_rate(optimizer, epoch, lr):
 
 def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
-    model.to("cuda")
-    dboxes = model.create_prior_boxes().to("cuda")
     cur_epoch = 1
     loss_acc = 0.0
 
@@ -41,16 +39,27 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
                 batch_bboxes[idx]       = batch_bboxes[idx].to("cuda")
                 batch_labels[idx]       = batch_labels[idx].to("cuda")
 
-            loc, conf = model(batch_clip)
+            outputs = model(batch_clip)
 
-            loss = criterion(loc, conf, dboxes, batch_bboxes, batch_labels) / acc_grad
+            targets = []
+            for i, (bboxes, labels) in enumerate(zip(batch_bboxes, batch_labels)):
+                target = torch.Tensor(bboxes.shape[0], 6)
+                target[:, 0] = i
+                target[:, 1] = labels
+                target[:, 2:] = bboxes
+                targets.append(target)
+
+            targets = torch.cat(targets, dim=0)
+
+
+            loss = criterion(outputs, targets) / acc_grad
             loss_acc += loss.item()
-            #loss.backward()
+            loss.backward()
 
             if (iteration + 1) % acc_grad == 0:
                 cnt_pram_update = cnt_pram_update + 1
                 nn.utils.clip_grad_value_(model.parameters(), clip_value=2.0)
-                #optimizer.step()
+                optimizer.step()
                 optimizer.zero_grad()
 
                 print("epoch : {}, update : {}, time = {}, loss = {}".format(cur_epoch,  cnt_pram_update, round(time.time() - t_batch, 2), loss_acc))
@@ -67,8 +76,8 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
         cur_epoch += 1
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.superYOWO import superYOWO
-from utils.box_utils import MultiBoxLoss, MultiBox_CIoU_Loss
+from model.YOLO2Stream import yolo_v8_m
+from utils.util import ComputeLoss
 
 def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = None):
     root_path = "/home/manh/Datasets/UCF101-24/ucf242"
@@ -84,10 +93,13 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = superYOWO(num_classes = 25, pretrain_path=pretrain_path)
+    model = yolo_v8_m(num_classes=24)
+    model.train()
+    model.to("cuda")
     
-    criterion = MultiBox_CIoU_Loss(num_classes=25)
+    #criterion = MultiBox_CIoU_Loss(num_classes=25)
     #criterion = MultiBoxLoss(num_classes=25)
+    criterion = ComputeLoss(model)
 
     return dataloader, model, criterion
 

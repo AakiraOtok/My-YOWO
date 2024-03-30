@@ -23,7 +23,7 @@ from model.MyYOWO import MyYOWO
 from utils.box_utils import MultiBoxLoss, Non_Maximum_Suppression, draw_bounding_box
 from utils.box_utils import Non_Maximum_Suppression, jaccard
 from tqdm import tqdm
-from model.superYOWO import superYOWO
+from model.YOLO2Stream import superYOWO
 
 def voc_ap(rec, prec, use_07_metric=True):
     """ ap = voc_ap(rec, prec, [use_07_metric])
