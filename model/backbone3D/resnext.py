@@ -30,7 +30,7 @@ class ResNeXtBottleneck(nn.Module):
         super(ResNeXtBottleneck, self).__init__()
         mid_planes = cardinality * int(planes / 32)
         self.conv1 = nn.Conv3d(inplanes, mid_planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm3d(mid_planes)
+        self.bn1 = nn.BatchNorm3d(mid_planes, 0.001, 0.03)
         self.conv2 = nn.Conv3d(
             mid_planes,
             mid_planes,
@@ -39,11 +39,11 @@ class ResNeXtBottleneck(nn.Module):
             padding=1,
             groups=cardinality,
             bias=False)
-        self.bn2 = nn.BatchNorm3d(mid_planes)
+        self.bn2 = nn.BatchNorm3d(mid_planes, 0.001, 0.03)
         self.conv3 = nn.Conv3d(
             mid_planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm3d(planes * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
+        self.bn3 = nn.BatchNorm3d(planes * self.expansion, 0.001, 0.03)
+        self.relu = nn.SiLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -86,8 +86,8 @@ class ResNeXt(nn.Module):
             stride=(1, 2, 2),
             padding=(3, 3, 3),
             bias=False)
-        self.bn1 = nn.BatchNorm3d(64)
-        self.relu = nn.ReLU(inplace=True)
+        self.bn1 = nn.BatchNorm3d(64, 0.001, 0.03)
+        self.relu = nn.SiLU(inplace=True)
         
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
         
@@ -99,6 +99,10 @@ class ResNeXt(nn.Module):
         
         self.layer3 = self._make_layer(
             block, 512, layers[2], shortcut_type, cardinality, stride=2)
+        
+        self.layer4 = self._make_layer(
+            block, 1024, layers[3], shortcut_type, cardinality, stride=2)
+        self.avgpool = nn.AvgPool3d((2, 1, 1), stride=1)
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
@@ -147,23 +151,13 @@ class ResNeXt(nn.Module):
 
         x = self.layer1(x)
         x = self.layer2(x)
-        out = x
         x = self.layer3(x)
-        
-        return out, x
-    
-    def load_pretrain(self, pretrain_path="/home/manh/checkpoint/resnext-101-kinetics.pth"):
-        
-        state_dict = self.state_dict()
+        x = self.layer4(x)
 
-        pretrain_state_dict = torch.load(pretrain_path)
-        for param_name, value in pretrain_state_dict['state_dict'].items():
-            if param_name not in state_dict:
-                continue
-            state_dict[param_name] = value
-            
-        self.load_state_dict(state_dict)
+        if x.size(2) == 2:
+            x = self.avgpool(x)
 
+        return x
 
 
 # def get_fine_tuning_parameters(model, ft_portion):
@@ -186,6 +180,18 @@ class ResNeXt(nn.Module):
 
 #     else:
 #         raise ValueError("Unsupported ft_portion: 'complete' or 'last_layer' expected")
+    
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/resnext-101-kinetics.pth'):
+        
+        state_dict = self.state_dict()
+
+        pretrain_state_dict = torch.load(pretrain_path)
+        for param_name, value in pretrain_state_dict['state_dict'].items():
+            if param_name not in state_dict:
+                continue
+            state_dict[param_name] = value
+            
+        self.load_state_dict(state_dict)
 
 
 def resnext50(**kwargs):
@@ -207,3 +213,6 @@ def resnext152(**kwargs):
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 8, 36, 3], **kwargs)
     return model
+
+
+

@@ -25,11 +25,11 @@ def warmup_learning_rate(optimizer, epoch, lr):
 
 def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
-    model.to("cuda")
-    dboxes = model.create_prior_boxes().to("cuda")
     cur_epoch = 1
+    loss_acc = 0.0
 
     while(cur_epoch <= max_epoch):
+        cnt_pram_update = 0
         for iteration, (batch_clip, batch_bboxes, batch_labels) in enumerate(dataloader): 
             t_batch = time.time()
 
@@ -39,30 +39,47 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
                 batch_bboxes[idx]       = batch_bboxes[idx].to("cuda")
                 batch_labels[idx]       = batch_labels[idx].to("cuda")
 
-            loc, conf = model(batch_clip)
+            outputs = model(batch_clip)
 
-            loss = criterion(loc, conf, dboxes, batch_bboxes, batch_labels)
+            targets = []
+            for i, (bboxes, labels) in enumerate(zip(batch_bboxes, batch_labels)):
+                target = torch.Tensor(bboxes.shape[0], 6)
+                target[:, 0] = i
+                target[:, 1] = labels
+                target[:, 2:] = bboxes
+                targets.append(target)
 
-            optimizer.zero_grad()
+            targets = torch.cat(targets, dim=0)
+
+
+            loss = criterion(outputs, targets) / acc_grad
+            loss_acc += loss.item()
             loss.backward()
-            nn.utils.clip_grad_value_(model.parameters(), clip_value=2.0)
-            optimizer.step()
 
-            print("epoch : {}, iteration : {}, time = {}, loss = {}".format(cur_epoch, iteration + 1, round(time.time() - t_batch, 2), loss))
+            if (iteration + 1) % acc_grad == 0:
+                cnt_pram_update = cnt_pram_update + 1
+                nn.utils.clip_grad_value_(model.parameters(), clip_value=2.0)
+                optimizer.step()
+                optimizer.zero_grad()
+
+                print("epoch : {}, update : {}, time = {}, loss = {}".format(cur_epoch,  cnt_pram_update, round(time.time() - t_batch, 2), loss_acc))
+                loss_acc = 0.0
+                if cnt_pram_update % 500 == 0:
+                    torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_{}_update_".format(cur_epoch) + str(cnt_pram_update) + ".pth")
 
         if cur_epoch in adjustlr_schedule:
             for param_group in optimizer.param_groups: 
-                param_group['lr'] *= 0.1
+                param_group['lr'] *= 0.5
 
-        torch.save(model.state_dict(), r"/home/manh/checkpoint/epoch_" + str(cur_epoch) + ".pth")
+        torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_" + str(cur_epoch) + ".pth")
         print("Saved model at epoch : {}".format(cur_epoch))
         cur_epoch += 1
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.MyYOWO import MyYOWO
-from utils.box_utils import MultiBoxLoss
+from model.YOLO2Stream import yolo_v8_m
+from utils.util import ComputeLoss
 
-def train_on_UCF(size = 300, version = "original", pretrain_path = None):
+def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = None):
     root_path = "/home/manh/Datasets/UCF101-24/ucf242"
     split_path = "trainlist.txt"
     data_path = "rgb-images"
@@ -71,20 +88,24 @@ def train_on_UCF(size = 300, version = "original", pretrain_path = None):
     sampling_rate = 1
 
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
-                          , clip_length, sampling_rate)
+                          , clip_length, sampling_rate, img_size=img_size)
     
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = MyYOWO(n_classes = 25)
+    model = yolo_v8_m(num_classes=24)
+    model.train()
+    model.to("cuda")
     
-    criterion = MultiBoxLoss(num_classes=25)
+    #criterion = MultiBox_CIoU_Loss(num_classes=25)
+    #criterion = MultiBoxLoss(num_classes=25)
+    criterion = ComputeLoss(model)
 
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = None
-    dataloader, model, criterion = train_on_UCF(version="original", size=300, pretrain_path=pretrain_path)
+    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_5_update_500.pth'
+    dataloader, model, criterion = train_on_UCF(version="original", img_size=(224, 224), pretrain_path=pretrain_path)
     biases     = []
     not_biases = []
     for param_name, param in model.named_parameters():
@@ -94,6 +115,6 @@ if __name__ == "__main__":
             else:
                 not_biases.append(param)
 
-    optimizer  = optim.SGD(params=[{'params' : biases, 'lr' : 2 * 1e-3}, {'params' : not_biases}], lr=1e-3, momentum=0.9, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-4}, {'params' : not_biases}], lr= 1e-4, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), max_epoch=9)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4), max_epoch=7)

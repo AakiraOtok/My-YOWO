@@ -20,58 +20,60 @@ import glob
 from math import sqrt
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.MyYOWO import MyYOWO
-from utils.box_utils import MultiBoxLoss, Non_Maximum_Suppression, draw_bounding_box
+from model.YOLO2Stream import yolo_v8_m
+from utils.box_utils import draw_bounding_box
+from utils.util import non_max_suppression
 
 UCF101_idx2name = {
-    1  : "Baseketball",
-    2  : "BaseketballDunk",
-    3  : "Biking",
-    4  : "CliffDiving",
-    5  : "CricketBowling",
-    6  : "Diving", 
-    7  : "Fencing",
-    8  : "FloorGymnastics",
-    9  : "GolfSwing",
-    10 : "HorseRiding",
-    11 : "IceDancing",
-    12 : "LongJump",
-    13 : "PoleVault",
-    14 : "RopeClimbing",
-    15 : "SalsaSpin",
-    16 : "SkateBoarding",
-    17 : "Skiing",
-    18 : "Skijet",
-    19 : "Soccer Juggling",
-    20 : "Surfing",
-    21 : "TennisSwing",
-    22 : "TrampolineJumping",
-    23 : "VolleyballSpiking",
-    24 : "WalkingWithDog"
+    0  : "Baseketball",
+    1  : "BaseketballDunk",
+    2  : "Biking",
+    3  : "CliffDiving",
+    4  : "CricketBowling",
+    5  : "Diving", 
+    6  : "Fencing",
+    7  : "FloorGymnastics",
+    8  : "GolfSwing",
+    9 : "HorseRiding",
+    10 : "IceDancing",
+    11 : "LongJump",
+    12 : "PoleVault",
+    13 : "RopeClimbing",
+    14 : "SalsaSpin",
+    15 : "SkateBoarding",
+    16 : "Skiing",
+    17 : "Skijet",
+    18 : "Soccer Juggling",
+    19 : "Surfing",
+    20 : "TennisSwing",
+    21 : "TrampolineJumping",
+    22 : "VolleyballSpiking",
+    23 : "WalkingWithDog"
 }
 
 
 def detect(dataset, model, num_classes=21, mapping=UCF101_idx2name):
     model.to("cuda")
-    dboxes = model.create_prior_boxes().to("cuda")
     #for images, bboxes, labels, difficulties in dataloader:
     for idx in range(dataset.__len__()):
         origin_image, clip, bboxes, labels = dataset.__getitem__(idx, get_origin_image=True)
 
         clip = clip.unsqueeze(0).to("cuda")
-        offset, conf = model(clip)
-        offset = offset.to("cuda")
-        conf   = conf.to("cuda")
-        pred_bboxes, pred_labels, pred_confs = Non_Maximum_Suppression(dboxes, offset[0], conf[0], conf_threshold=0.3, iou_threshold=0.45, top_k=200, num_classes=num_classes)
+        outputs = model(clip)
+        outputs = non_max_suppression(outputs, conf_threshold=0.3, iou_threshold=0.5)[0]
+        #print(outputs[0])
+        #sys.exit()
 
-        draw_bounding_box(origin_image, pred_bboxes, pred_labels, pred_confs, mapping)
+        origin_image = cv2.resize(origin_image, (224, 224))
+        draw_bounding_box(origin_image, outputs[:, :4], outputs[:, 5], outputs[:, 4], mapping)
         #cv2.imshow("img", origin_image)
-        #k = cv2.waitKey()
-        #if (k == ord('q')):
-            #break
-        cv2.imwrite(r"H:\detect_images\idx_" + str(idx) + r".jpg", origin_image)
+        ##k = cv2.waitKey()
+        ##if (k == ord('q')):
+            ##break
+        cv2.imwrite(r"H:\detect_images\_" + str(idx) + r".jpg", origin_image)
         #print("ok")
         print("image {} saved!".format(idx))
+
 
 def detect_on_UCF101(size=300, version="original", pretrain_path=None):
     root_path = r"H:\Datasets\ucf24"
@@ -84,15 +86,19 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
                           , clip_length, sampling_rate)
 
-    model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
+    #model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
+    #model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
+    model = yolo_v8_m(num_classes=24, pretrain_path=pretrain_path)
+    
         
-    num_classes = 25
+    num_classes = 24
     mapping = UCF101_idx2name
     return dataset, model, num_classes, mapping
 
 
 if __name__ == "__main__":
-    pretrain_path = r"H:\checkpoint\epoch_5.pth"
+
+    pretrain_path = r"H:\checkpoint\epch_3_update_1000.pth"
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()
