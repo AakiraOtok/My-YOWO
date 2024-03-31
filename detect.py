@@ -23,6 +23,7 @@ from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
 from model.YOLO2Stream import yolo_v8_m
 from utils.box_utils import draw_bounding_box
 from utils.util import non_max_suppression
+from datasets.ucf.transforms import UCF_transform, Augmentation
 
 UCF101_idx2name = {
     0  : "Baseketball",
@@ -63,20 +64,27 @@ def detect(dataset, model, num_classes=21, mapping=UCF101_idx2name):
         outputs = non_max_suppression(outputs, conf_threshold=0.3, iou_threshold=0.5)[0]
         #print(outputs[0])
         #sys.exit()
+        print(bboxes)
 
         origin_image = cv2.resize(origin_image, (224, 224))
-        draw_bounding_box(origin_image, outputs[:, :4], outputs[:, 5], outputs[:, 4], mapping)
-        #cv2.imshow("img", origin_image)
-        ##k = cv2.waitKey()
-        ##if (k == ord('q')):
-            ##break
-        cv2.imwrite(r"H:\detect_images\_" + str(idx) + r".jpg", origin_image)
+        #draw_bounding_box(origin_image, outputs[:, :4], outputs[:, 5], outputs[:, 4], mapping)
+        for box in bboxes:
+            pt1 = (int(box[0]*224), int(box[1]*224))
+            pt2 = (int(box[2]*224), int(box[3]*224))
+            print(pt1, pt2)
+            cv2.rectangle(origin_image, pt1, pt2, 1, 1, 1)
+            cv2.imshow("img", origin_image)
+            k = cv2.waitKey()
+
+            if (k == ord('q')):
+                break
+        #cv2.imwrite(r"H:\detect_images\_" + str(idx) + r".jpg", origin_image)
         #print("ok")
-        print("image {} saved!".format(idx))
+        #print("image {} saved!".format(idx))
 
 
 def detect_on_UCF101(size=300, version="original", pretrain_path=None):
-    root_path = r"H:\Datasets\ucf24"
+    root_path = '/home/manh/Datasets/UCF101-24/ucf242'
     split_path = "testlist.txt"
     data_path = "rgb-images"
     ann_path = "labels"
@@ -84,7 +92,7 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
     sampling_rate = 1
 
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
-                          , clip_length, sampling_rate)
+                          , clip_length, sampling_rate, transform=UCF_transform())
 
     #model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
     #model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
@@ -98,7 +106,7 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
 
 if __name__ == "__main__":
 
-    pretrain_path = r"H:\checkpoint\epch_3_update_1000.pth"
+    pretrain_path = r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_3.pth"
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()

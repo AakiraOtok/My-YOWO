@@ -16,21 +16,22 @@ class UCF_transform():
     def __init__(self):
         pass
 
-    def cvt_to_tensor(self, clip):
-        clip = np.array(clip)
-        clip = torch.FloatTensor(clip)
-        clip = clip[:, :, :, (2, 1, 0)].permute(3, 0, 1, 2).contiguous() # BGR -> RGB
-        return clip
+    def to_tensor(self, video_clip):
+        return [F.to_tensor(image) for image in video_clip]
 
     def normalize(self, clip, mean=ucf_config.MEAN, std=ucf_config.STD):
-        mean  = torch.FloatTensor(mean).view(-1, 1, 1, 1)
-        std   = torch.FloatTensor(std).view(-1, 1, 1, 1)
+        mean  = torch.FloatTensor([0.485, 0.456, 0.406]).view(-1, 1, 1, 1)
+        std   = torch.FloatTensor([0.229, 0.224, 0.225]).view(-1, 1, 1, 1)
         clip -= mean
         clip /= std
         return clip
     
     def __call__(self, clip, boxes):
-        clip = self.cvt_to_tensor(clip)
+        W, H = clip[-1].size
+        boxes[:, :4] /= np.array([W, H, W, H])
+        clip = [img.resize([224, 224]) for img in clip]
+        clip = self.to_tensor(clip)
+        clip = torch.stack(clip, dim=1)
         clip = self.normalize(clip)
         return clip, boxes
 
@@ -158,8 +159,8 @@ class Augmentation(object):
 
     def __call__(self, video_clip, target):
         # Initialize Random Variables
-        oh = video_clip[0].height  
-        ow = video_clip[0].width
+        oh = video_clip[-1].height  
+        ow = video_clip[-1].width
         
         # random crop
         video_clip, dx, dy, sx, sy = self.random_crop(video_clip, ow, oh)
