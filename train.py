@@ -117,4 +117,4 @@ if __name__ == "__main__":
 
     optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-4}, {'params' : not_biases}], lr= 1e-4, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4, 5), max_epoch=8)
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4, 5), max_epoch=8)   
