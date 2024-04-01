@@ -26,14 +26,15 @@ class UCF_transform():
         clip /= std
         return clip
     
-    def __call__(self, clip, boxes):
+    def __call__(self, clip, targets):
         W, H = clip[-1].size
-        boxes[:, :4] /= np.array([W, H, W, H])
+        targets[:, :4] /= np.array([W, H, W, H])
         clip = [img.resize([224, 224]) for img in clip]
         clip = self.to_tensor(clip)
         clip = torch.stack(clip, dim=1)
         clip = self.normalize(clip)
-        return clip, boxes
+        targets = torch.as_tensor(targets).float()
+        return clip, targets
 
 import torch
 import torch.utils.data as data

@@ -120,6 +120,7 @@ def non_max_suppression(prediction, conf_threshold=0.25, iou_threshold=0.45):
     xc = prediction[:, 4:4 + nc].amax(1) > conf_threshold  # candidates
 
     # Settings
+    max_wh = 7680  # (pixels) maximum box width and height
     max_det = 300  # the maximum number of boxes to keep after NMS
     max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
 
@@ -152,8 +153,8 @@ def non_max_suppression(prediction, conf_threshold=0.25, iou_threshold=0.45):
         x = x[x[:, 4].argsort(descending=True)[:max_nms]]
 
         # Batched NMS
-
-        boxes, scores = x[:, :4], x[:, 4]  # boxes (offset by class), scores
+        c = x[:, 5:6] * max_wh  # classes
+        boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
         i = torchvision.ops.nms(boxes, scores, iou_threshold)  # NMS
         i = i[:max_det]  # limit detections
         outputs[index] = x[i]
