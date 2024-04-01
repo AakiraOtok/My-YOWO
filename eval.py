@@ -61,7 +61,7 @@ def eval(model, dataloader):
 
         # NMS
         targets[:, 2:] *= torch.tensor((width, height, width, height)).cuda()  # to pixels
-        outputs = non_max_suppression(outputs, 0.005, 0.5)
+        outputs = non_max_suppression(outputs, 0.25, 0.4)
 
         # Metrics
         for i, output in enumerate(outputs):
@@ -139,7 +139,7 @@ def eval_on_UCF101(pretrain_path, size):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_5.pth'
+    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_7.pth'
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)

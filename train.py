@@ -17,7 +17,7 @@ import sys
 import glob
 
 from math import sqrt
-from utils.gradflow_check import plot_grad_flow_v2
+from utils.gradflow_check import plot_grad_flow
 
 def warmup_learning_rate(optimizer, epoch, lr):
     lr_init = 0.0001
@@ -26,7 +26,7 @@ def warmup_learning_rate(optimizer, epoch, lr):
 
 def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
-    cur_epoch = 6
+    cur_epoch = 1
     loss_acc = 0.0
 
     while(cur_epoch <= max_epoch):
@@ -56,7 +56,8 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
             loss = criterion(outputs, targets) / acc_grad
             loss_acc += loss.item()
             loss.backward()
-            #plot_grad_flow_v2(model.named_parameters()) model too large, can't see anything!
+            #plot_grad_flow(model.named_parameters()) #model too large, can't see anything!
+            #plt.show()
 
             if (iteration + 1) % acc_grad == 0:
                 cnt_pram_update = cnt_pram_update + 1
@@ -96,6 +97,9 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
                                  , num_workers=6, pin_memory=True)
     
     model = yolo_v8_m(num_classes=24, pretrain_path=pretrain_path)
+    total_params = sum(p.numel() for p in model.parameters())
+    #print(f"Tổng số lượng tham số: {total_params}")
+    #sys.exit()
     model.train()
     model.to("cuda")
     
@@ -106,7 +110,7 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_5.pth' 
+    pretrain_path = None
     dataloader, model, criterion = train_on_UCF(version="original", img_size=(224, 224), pretrain_path=pretrain_path)
     biases     = []
     not_biases = []
@@ -117,6 +121,6 @@ if __name__ == "__main__":
             else:
                 not_biases.append(param)
 
-    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 0.0625 * 2 * 1e-4}, {'params' : not_biases}], lr= 0.0625 * 1e-4, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-4}, {'params' : not_biases}], lr= 1e-4, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4, 5), max_epoch=8)   
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4, 5), max_epoch=7)   
