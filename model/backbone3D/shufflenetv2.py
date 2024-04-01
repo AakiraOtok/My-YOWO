@@ -15,15 +15,15 @@ import math
 def conv_bn(inp, oup, stride):
     return nn.Sequential(
         nn.Conv3d(inp, oup, kernel_size=3, stride=stride, padding=(1,1,1), bias=False),
-        nn.BatchNorm3d(oup),
-        nn.ReLU(inplace=True)
+        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.SiLU(inplace=True)
     )
 
 def conv_1x1x1_bn(inp, oup):
     return nn.Sequential(
         nn.Conv3d(inp, oup, 1, 1, 0, bias=False),
-        nn.BatchNorm3d(oup),
-        nn.ReLU(inplace=True)
+        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.SiLU(inplace=True)
     )
 
 def channel_shuffle(x, groups):
@@ -52,39 +52,39 @@ class InvertedResidual(nn.Module):
         	self.banch2 = nn.Sequential(
                 # pw
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc),
-                nn.ReLU(inplace=True),
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.SiLU(inplace=True),
                 # dw
                 nn.Conv3d(oup_inc, oup_inc, 3, stride, 1, groups=oup_inc, bias=False),
-                nn.BatchNorm3d(oup_inc),
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
                 # pw-linear
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc),
-                nn.ReLU(inplace=True),
-            )                
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.SiLU(inplace=True),
+            )
         else:                  
             self.banch1 = nn.Sequential(
                 # dw
                 nn.Conv3d(inp, inp, 3, stride, 1, groups=inp, bias=False),
-                nn.BatchNorm3d(inp),
+                nn.BatchNorm3d(inp, 0.001, 0.03),
                 # pw-linear
                 nn.Conv3d(inp, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc),
-                nn.ReLU(inplace=True),
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.SiLU(inplace=True),
             )        
     
             self.banch2 = nn.Sequential(
                 # pw
                 nn.Conv3d(inp, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc),
-                nn.ReLU(inplace=True),
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.SiLU(inplace=True),
                 # dw
                 nn.Conv3d(oup_inc, oup_inc, 3, stride, 1, groups=oup_inc, bias=False),
-                nn.BatchNorm3d(oup_inc),
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
                 # pw-linear
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc),
-                nn.ReLU(inplace=True),
+                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.SiLU(inplace=True),
             )
           
     @staticmethod
@@ -159,6 +159,18 @@ class ShuffleNetV2(nn.Module):
             out = self.avgpool(out)
 
         return out
+    
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/kinetics_shufflenetv2_1.0x_RGB_16_best.pth'):
+        
+        state_dict = self.state_dict()
+
+        pretrain_state_dict = torch.load(pretrain_path)
+        for param_name, value in pretrain_state_dict['state_dict'].items():
+            if param_name not in state_dict:
+                continue
+            state_dict[param_name] = value
+            
+        self.load_state_dict(state_dict)
 
 
 def get_fine_tuning_parameters(model, ft_portion):

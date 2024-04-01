@@ -333,7 +333,7 @@ class CFAMBlock(nn.Module):
         return output
 
 class YOLO2Stream(torch.nn.Module):
-    def __init__(self, width, depth, num_classes, pretrain_path=None):
+    def __init__(self, width, depth, num_classes, pretrain_yolo, pretrain_path=None):
         super().__init__()
         self.net = DarkNet(width, depth)
         self.net3D = resnext101()
@@ -360,7 +360,7 @@ class YOLO2Stream(torch.nn.Module):
         if pretrain_path is not None:
             self.load_state_dict(torch.load(pretrain_path))
         else : 
-            self.load_pretrain()
+            self.load_pretrain(pretrain_path=pretrain_yolo)
             self.net3D.load_pretrain()
             self.fusion.init_weights()
 
@@ -385,7 +385,7 @@ class YOLO2Stream(torch.nn.Module):
                 delattr(m, 'norm')
         return self
     
-    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth'):
+    def load_pretrain(self, pretrain_path):
         state_dict = self.state_dict()
 
         pretrain_state_dict = torch.load(pretrain_path)
@@ -413,7 +413,7 @@ def yolo_v8_s(num_classes: int = 80):
 def yolo_v8_m(num_classes: int = 80, pretrain_path=None):
     depth = [2, 4, 4]
     width = [3, 48, 96, 192, 384, 576]
-    return YOLO2Stream(width, depth, num_classes, pretrain_path)
+    return YOLO2Stream(width, depth, num_classes, pretrain_path=pretrain_path)
 
 
 def yolo_v8_l(num_classes: int = 80):
@@ -426,6 +426,34 @@ def yolo_v8_x(num_classes: int = 80):
     depth = [3, 6, 6]
     width = [3, 80, 160, 320, 640, 640]
     return YOLO2Stream(width, depth, num_classes)
+
+def yolo_v8(num_classes, ver='m', backbone_3D='resnext101', pretrain_path=None):
+
+    assert ver in ['n', 's', 'm', 'l', 'x'], "only suport for n, s, m, l, or x version"
+    assert backbone_3D in ['resnext101', 'mobilenetv2', 'shufflenetv2'], "only suport for resnext101, mobilenetv2 or shufflenetv2"
+
+    if ver == 'n':
+        pretrain_yolo = None
+        depth = [1, 2, 2]
+        width = [3, 16, 32, 64, 128, 256]
+    elif ver == 's':
+        pretrain_yolo = None
+        depth = [1, 2, 2]
+        width = [3, 32, 64, 128, 256, 512]
+    elif ver == 'm':
+        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth'
+        depth = [2, 4, 4]
+        width = [3, 48, 96, 192, 384, 576]
+    elif ver == 'l':
+        pretrain_yolo = None
+        depth = [3, 6, 6]
+        width = [3, 64, 128, 256, 512, 512]
+    elif ver == 'x':
+        pretrain_yolo = None
+        depth = [3, 6, 6]
+        width = [3, 80, 160, 320, 640, 640]
+
+    return YOLO2Stream(width, depth, num_classes, pretrain_yolo, pretrain_path)
 
 
 if __name__ == "__main__":

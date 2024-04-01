@@ -14,16 +14,16 @@ from torch.autograd import Variable
 def conv_bn(inp, oup, stride):
     return nn.Sequential(
         nn.Conv3d(inp, oup, kernel_size=3, stride=stride, padding=(1,1,1), bias=False),
-        nn.BatchNorm3d(oup),
-        nn.ReLU6(inplace=True)
+        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.SiLU(inplace=True)
     )
 
 
 def conv_1x1x1_bn(inp, oup):
     return nn.Sequential(
         nn.Conv3d(inp, oup, 1, 1, 0, bias=False),
-        nn.BatchNorm3d(oup),
-        nn.ReLU6(inplace=True)
+        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.SiLU(inplace=True)
     )
 
 
@@ -39,25 +39,25 @@ class InvertedResidual(nn.Module):
             self.conv = nn.Sequential(
                 # dw
                 nn.Conv3d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
-                nn.BatchNorm3d(hidden_dim),
-                nn.ReLU6(inplace=True),
+                nn.BatchNorm3d(hidden_dim, 0.001, 0.03),
+                nn.SiLU(inplace=True),
                 # pw-linear
                 nn.Conv3d(hidden_dim, oup, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup),
+                nn.BatchNorm3d(oup, 0.001, 0.03),
             )
         else:
             self.conv = nn.Sequential(
                 # pw
                 nn.Conv3d(inp, hidden_dim, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(hidden_dim),
-                nn.ReLU6(inplace=True),
+                nn.BatchNorm3d(hidden_dim, 0.001, 0.03),
+                nn.SiLU(inplace=True),
                 # dw
                 nn.Conv3d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
-                nn.BatchNorm3d(hidden_dim),
-                nn.ReLU6(inplace=True),
+                nn.BatchNorm3d(hidden_dim, 0.001, 0.03),
+                nn.SiLU(inplace=True),
                 # pw-linear
                 nn.Conv3d(hidden_dim, oup, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup),
+                nn.BatchNorm3d(oup, 0.001, 0.03),
             )
 
     def forward(self, x):
@@ -125,6 +125,18 @@ class MobileNetV2(nn.Module):
                 n = m.weight.size(1)
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/kinetics_mobilenetv2_1.0x_RGB_16_best.pth'):
+        
+        state_dict = self.state_dict()
+
+        pretrain_state_dict = torch.load(pretrain_path)
+        for param_name, value in pretrain_state_dict['state_dict'].items():
+            if param_name not in state_dict:
+                continue
+            state_dict[param_name] = value
+            
+        self.load_state_dict(state_dict)
 
 
 def get_fine_tuning_parameters(model, ft_portion):
