@@ -15,14 +15,14 @@ import math
 def conv_bn(inp, oup, stride):
     return nn.Sequential(
         nn.Conv3d(inp, oup, kernel_size=3, stride=stride, padding=(1,1,1), bias=False),
-        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.BatchNorm3d(oup),
         nn.SiLU(inplace=True)
     )
 
 def conv_1x1x1_bn(inp, oup):
     return nn.Sequential(
         nn.Conv3d(inp, oup, 1, 1, 0, bias=False),
-        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.BatchNorm3d(oup),
         nn.SiLU(inplace=True)
     )
 
@@ -52,38 +52,38 @@ class InvertedResidual(nn.Module):
         	self.banch2 = nn.Sequential(
                 # pw
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 nn.SiLU(inplace=True),
                 # dw
                 nn.Conv3d(oup_inc, oup_inc, 3, stride, 1, groups=oup_inc, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 # pw-linear
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 nn.SiLU(inplace=True),
             )
         else:                  
             self.banch1 = nn.Sequential(
                 # dw
                 nn.Conv3d(inp, inp, 3, stride, 1, groups=inp, bias=False),
-                nn.BatchNorm3d(inp, 0.001, 0.03),
+                nn.BatchNorm3d(inp),
                 # pw-linear
                 nn.Conv3d(inp, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 nn.SiLU(inplace=True),
             )        
     
             self.banch2 = nn.Sequential(
                 # pw
                 nn.Conv3d(inp, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 nn.SiLU(inplace=True),
                 # dw
                 nn.Conv3d(oup_inc, oup_inc, 3, stride, 1, groups=oup_inc, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 # pw-linear
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup_inc, 0.001, 0.03),
+                nn.BatchNorm3d(oup_inc),
                 nn.SiLU(inplace=True),
             )
           

@@ -15,7 +15,7 @@ import cv2
 import random
 import sys
 import glob
-from model.backbone3D.resnext import resnext101
+from model.backbone3D import resnext, shufflenetv2, mobilenetv2
 from model.backbone2D.YOLOv8 import yolo_v8_m
 from utils.box_utils import make_anchors
 
@@ -54,7 +54,7 @@ class Conv(torch.nn.Module):
     def __init__(self, in_ch, out_ch, k=1, s=1, p=None, d=1, g=1):
         super().__init__()
         self.conv = torch.nn.Conv2d(in_ch, out_ch, k, s, pad(k, p, d), d, g, False)
-        self.norm = torch.nn.BatchNorm2d(out_ch, 0.001, 0.03)
+        self.norm = torch.nn.BatchNorm2d(out_ch)
         self.relu = torch.nn.SiLU(inplace=True)
 
     def forward(self, x):
@@ -234,13 +234,15 @@ class Head(torch.nn.Module):
 
 class Fusion_2D_3D(nn.Module):
 
-    def __init__(self, channels_2D, channels_3D):
+    def __init__(self, channels_2D, channels_3D, module_name):
         super().__init__()
 
         layers = []
         for in_channels in channels_2D:
-            #layers.append(CSP(in_ch=in_channels + channels_3D, out_ch=in_channels, n=3))
-            layers.append(CFAMBlock(in_channels + channels_3D, in_channels))
+            if module_name == 'CSP':
+                layers.append(CSP(in_ch=in_channels + channels_3D, out_ch=in_channels, n=3))
+            elif module_name == 'CFAM':
+                layers.append(CFAMBlock(in_channels + channels_3D, in_channels))
 
         self.csp = nn.ModuleList(layers)
 
@@ -266,7 +268,7 @@ class Fusion_2D_3D(nn.Module):
         """
         for c in self.children():
             if isinstance(c, nn.Conv2d):
-                nn.init.xavier_uniform_(c.weight)
+                nn.init.kaiming_uniform_(c.weight)
                 if c.bias is not None:
                     nn.init.constant_(c.bias, 0.)
 
@@ -307,17 +309,17 @@ class CFAMBlock(nn.Module):
         super(CFAMBlock, self).__init__()
         inter_channels = 1024
         self.conv_bn_relu1 = nn.Sequential(nn.Conv2d(in_channels, inter_channels, kernel_size=1, bias=False),
-                                    nn.BatchNorm2d(inter_channels, 0.001, 0.03),
+                                    nn.BatchNorm2d(inter_channels),
                                     nn.SiLU())
         
         self.conv_bn_relu2 = nn.Sequential(nn.Conv2d(inter_channels, inter_channels, 3, padding=1, bias=False),
-                                    nn.BatchNorm2d(inter_channels, 0.001, 0.03),
+                                    nn.BatchNorm2d(inter_channels),
                                     nn.SiLU())
 
         self.sc = CAM_Module(inter_channels)
 
         self.conv_bn_relu3 = nn.Sequential(nn.Conv2d(inter_channels, inter_channels, 3, padding=1, bias=False),
-                                   nn.BatchNorm2d(inter_channels, 0.001, 0.03),
+                                   nn.BatchNorm2d(inter_channels),
                                    nn.SiLU())
 
         self.conv_out = nn.Sequential(nn.Dropout2d(0.1, False), nn.Conv2d(inter_channels, out_channels, 1))
@@ -333,10 +335,10 @@ class CFAMBlock(nn.Module):
         return output
 
 class YOLO2Stream(torch.nn.Module):
-    def __init__(self, width, depth, num_classes, pretrain_yolo, pretrain_path=None):
+    def __init__(self, width, depth, num_classes, backbone3D, fusion_module, pretrain_yolo=None, pretrain_path=None):
         super().__init__()
         self.net = DarkNet(width, depth)
-        self.net3D = resnext101()
+        self.net3D = backbone3D
 
         dummy_img3D = torch.zeros(1, 3, 16, 224, 224)
         dummy_img2D = torch.zeros(1, 3, 224, 224)
@@ -349,7 +351,7 @@ class YOLO2Stream(torch.nn.Module):
         out_channels_2D = [x.shape[1] for x in out_2D]
         out_channels_3D = out_3D.shape[1]
 
-        self.fusion = Fusion_2D_3D(out_channels_2D, out_channels_3D)
+        self.fusion = Fusion_2D_3D(out_channels_2D, out_channels_3D, fusion_module)
         self.fpn = DarkFPN(width, depth)
 
         self.detection_head = Head(num_classes, (width[3], width[4], width[5]))
@@ -360,7 +362,7 @@ class YOLO2Stream(torch.nn.Module):
         if pretrain_path is not None:
             self.load_state_dict(torch.load(pretrain_path))
         else : 
-            self.load_pretrain(pretrain_path=pretrain_yolo)
+            self.load_pretrain(pretrain_yolo=pretrain_yolo)
             self.net3D.load_pretrain()
             self.fusion.init_weights()
 
@@ -385,10 +387,10 @@ class YOLO2Stream(torch.nn.Module):
                 delattr(m, 'norm')
         return self
     
-    def load_pretrain(self, pretrain_path):
+    def load_pretrain(self, pretrain_yolo):
         state_dict = self.state_dict()
 
-        pretrain_state_dict = torch.load(pretrain_path)
+        pretrain_state_dict = torch.load(pretrain_yolo)
         
         for param_name, value in pretrain_state_dict.items():
             if param_name not in state_dict:
@@ -397,47 +399,18 @@ class YOLO2Stream(torch.nn.Module):
             
         self.load_state_dict(state_dict)
 
-
-def yolo_v8_n(num_classes: int = 80):
-    depth = [1, 2, 2]
-    width = [3, 16, 32, 64, 128, 256]
-    return YOLO2Stream(width, depth, num_classes)
-
-
-def yolo_v8_s(num_classes: int = 80):
-    depth = [1, 2, 2]
-    width = [3, 32, 64, 128, 256, 512]
-    return YOLO2Stream(width, depth, num_classes)
-
-
-def yolo_v8_m(num_classes: int = 80, pretrain_path=None):
-    depth = [2, 4, 4]
-    width = [3, 48, 96, 192, 384, 576]
-    return YOLO2Stream(width, depth, num_classes, pretrain_path=pretrain_path)
-
-
-def yolo_v8_l(num_classes: int = 80):
-    depth = [3, 6, 6]
-    width = [3, 64, 128, 256, 512, 512]
-    return YOLO2Stream(width, depth, num_classes)
-
-
-def yolo_v8_x(num_classes: int = 80):
-    depth = [3, 6, 6]
-    width = [3, 80, 160, 320, 640, 640]
-    return YOLO2Stream(width, depth, num_classes)
-
-def yolo_v8(num_classes, ver='m', backbone_3D='resnext101', pretrain_path=None):
+def yolo_v8(num_classes, ver, backbone_3D, fusion_module, pretrain_path=None):
 
     assert ver in ['n', 's', 'm', 'l', 'x'], "only suport for n, s, m, l, or x version"
     assert backbone_3D in ['resnext101', 'mobilenetv2', 'shufflenetv2'], "only suport for resnext101, mobilenetv2 or shufflenetv2"
+    assert fusion_module in ['CFAM', 'CSP']
 
     if ver == 'n':
-        pretrain_yolo = None
+        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_n.pth'
         depth = [1, 2, 2]
         width = [3, 16, 32, 64, 128, 256]
     elif ver == 's':
-        pretrain_yolo = None
+        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_s.pth'
         depth = [1, 2, 2]
         width = [3, 32, 64, 128, 256, 512]
     elif ver == 'm':
@@ -445,20 +418,27 @@ def yolo_v8(num_classes, ver='m', backbone_3D='resnext101', pretrain_path=None):
         depth = [2, 4, 4]
         width = [3, 48, 96, 192, 384, 576]
     elif ver == 'l':
-        pretrain_yolo = None
+        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_l.pth'
         depth = [3, 6, 6]
         width = [3, 64, 128, 256, 512, 512]
     elif ver == 'x':
-        pretrain_yolo = None
+        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_x.pth'
         depth = [3, 6, 6]
         width = [3, 80, 160, 320, 640, 640]
 
-    return YOLO2Stream(width, depth, num_classes, pretrain_yolo, pretrain_path)
+    if backbone_3D == 'resnext101':
+        backbone3D = resnext.resnext101()
+    elif backbone_3D == 'mobilenetv2':
+        backbone3D = mobilenetv2.get_model()
+    elif backbone3D == 'shufflenetv2':
+        backbone3D = shufflenetv2.get_model()
+
+    return YOLO2Stream(width, depth, num_classes, backbone3D, fusion_module, pretrain_yolo, pretrain_path)
 
 
 if __name__ == "__main__":
 
-    model = yolo_v8_m(num_classes=25)
+    model = yolo_v8(num_classes=25)
     total_params = sum(p.numel() for p in model.parameters())
     print("Tổng số lượng tham số của mô hình: ", total_params) 
     dummy_img = torch.Tensor(1, 3, 16, 224, 224)

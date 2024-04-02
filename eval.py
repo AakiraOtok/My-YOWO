@@ -128,7 +128,7 @@ def eval_on_UCF101(pretrain_path, size):
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
                           , clip_length, sampling_rate, img_size=(224, 224), transform=UCF_transform())
     
-    dataloader = data.DataLoader(dataset, 8, False, collate_fn=UCF_collate_fn
+    dataloader = data.DataLoader(dataset, 32, False, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
     model = yolo_v8_m(num_classes=24, pretrain_path=pretrain_path)

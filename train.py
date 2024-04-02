@@ -67,19 +67,19 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
                 print("epoch : {}, update : {}, time = {}, loss = {}".format(cur_epoch,  cnt_pram_update, round(time.time() - t_batch, 2), loss_acc))
                 loss_acc = 0.0
-                if cnt_pram_update % 500 == 0:
-                    torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_{}_update_".format(cur_epoch) + str(cnt_pram_update) + ".pth")
+                #if cnt_pram_update % 500 == 0:
+                    #torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epch_{}_update_".format(cur_epoch) + str(cnt_pram_update) + ".pth")
 
         if cur_epoch in adjustlr_schedule:
             for param_group in optimizer.param_groups: 
-                param_group['lr'] *= 0.5
+                param_group['lr'] *= 0.333
 
         torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_" + str(cur_epoch) + ".pth")
         print("Saved model at epoch : {}".format(cur_epoch))
         cur_epoch += 1
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.YOLO2Stream import yolo_v8_m
+from model.YOLO2Stream import yolo_v8
 from utils.util import ComputeLoss
 
 def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = None):
@@ -96,9 +96,9 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo_v8_m(num_classes=24, pretrain_path=pretrain_path)
+    model = yolo_v8(num_classes=24, ver='m', backbone_3D='mobilenetv2', fusion_module='CSP', pretrain_path=pretrain_path)
     total_params = sum(p.numel() for p in model.parameters())
-    #print(f"Tổng số lượng tham số: {total_params}")
+    print(f"Tổng số lượng tham số: {total_params}")
     #sys.exit()
     model.train()
     model.to("cuda")
@@ -112,15 +112,7 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
 if __name__ == "__main__":
     pretrain_path = None
     dataloader, model, criterion = train_on_UCF(version="original", img_size=(224, 224), pretrain_path=pretrain_path)
-    biases     = []
-    not_biases = []
-    for param_name, param in model.named_parameters():
-        if param.requires_grad:
-            if param_name.endswith('bias'):
-                biases.append(param)
-            else:
-                not_biases.append(param)
 
-    optimizer  = optim.AdamW(params=[{'params' : biases, 'lr' : 2 * 1e-4}, {'params' : not_biases}], lr= 1e-4, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-3, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(2, 3, 4, 5), max_epoch=7)   
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4, 5, 6), max_epoch=9)   

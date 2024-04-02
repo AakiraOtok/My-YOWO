@@ -14,7 +14,7 @@ from torch.autograd import Variable
 def conv_bn(inp, oup, stride):
     return nn.Sequential(
         nn.Conv3d(inp, oup, kernel_size=3, stride=stride, padding=(1,1,1), bias=False),
-        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.BatchNorm3d(oup),
         nn.SiLU(inplace=True)
     )
 
@@ -22,7 +22,7 @@ def conv_bn(inp, oup, stride):
 def conv_1x1x1_bn(inp, oup):
     return nn.Sequential(
         nn.Conv3d(inp, oup, 1, 1, 0, bias=False),
-        nn.BatchNorm3d(oup, 0.001, 0.03),
+        nn.BatchNorm3d(oup),
         nn.SiLU(inplace=True)
     )
 
@@ -39,25 +39,25 @@ class InvertedResidual(nn.Module):
             self.conv = nn.Sequential(
                 # dw
                 nn.Conv3d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
-                nn.BatchNorm3d(hidden_dim, 0.001, 0.03),
+                nn.BatchNorm3d(hidden_dim),
                 nn.SiLU(inplace=True),
                 # pw-linear
                 nn.Conv3d(hidden_dim, oup, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup, 0.001, 0.03),
+                nn.BatchNorm3d(oup),
             )
         else:
             self.conv = nn.Sequential(
                 # pw
                 nn.Conv3d(inp, hidden_dim, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(hidden_dim, 0.001, 0.03),
+                nn.BatchNorm3d(hidden_dim),
                 nn.SiLU(inplace=True),
                 # dw
                 nn.Conv3d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
-                nn.BatchNorm3d(hidden_dim, 0.001, 0.03),
+                nn.BatchNorm3d(hidden_dim),
                 nn.SiLU(inplace=True),
                 # pw-linear
                 nn.Conv3d(hidden_dim, oup, 1, 1, 0, bias=False),
-                nn.BatchNorm3d(oup, 0.001, 0.03),
+                nn.BatchNorm3d(oup),
             )
 
     def forward(self, x):
