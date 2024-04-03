@@ -160,7 +160,7 @@ class ShuffleNetV2(nn.Module):
 
         return out
     
-    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/kinetics_shufflenetv2_1.0x_RGB_16_best.pth'):
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/kinetics_shufflenetv2_1.0x_RGB_16_best.pth'):
         
         state_dict = self.state_dict()
 

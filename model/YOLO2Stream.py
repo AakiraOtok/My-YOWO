@@ -307,7 +307,7 @@ class CAM_Module(nn.Module):
 class CFAMBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(CFAMBlock, self).__init__()
-        inter_channels = 1024
+        inter_channels = out_channels
         self.conv_bn_relu1 = nn.Sequential(nn.Conv2d(in_channels, inter_channels, kernel_size=1, bias=False),
                                     nn.BatchNorm2d(inter_channels),
                                     nn.SiLU())
@@ -406,23 +406,23 @@ def yolo_v8(num_classes, ver, backbone_3D, fusion_module, pretrain_path=None):
     assert fusion_module in ['CFAM', 'CSP']
 
     if ver == 'n':
-        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_n.pth'
+        pretrain_yolo = '/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_n.pth'
         depth = [1, 2, 2]
         width = [3, 16, 32, 64, 128, 256]
     elif ver == 's':
-        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_s.pth'
+        pretrain_yolo = '/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_s.pth'
         depth = [1, 2, 2]
         width = [3, 32, 64, 128, 256, 512]
     elif ver == 'm':
-        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth'
+        pretrain_yolo = '/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_m2.pth'
         depth = [2, 4, 4]
         width = [3, 48, 96, 192, 384, 576]
     elif ver == 'l':
-        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_l.pth'
+        pretrain_yolo = '/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_l.pth'
         depth = [3, 6, 6]
         width = [3, 64, 128, 256, 512, 512]
     elif ver == 'x':
-        pretrain_yolo = '/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_x.pth'
+        pretrain_yolo = '/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_x.pth'
         depth = [3, 6, 6]
         width = [3, 80, 160, 320, 640, 640]
 
@@ -430,7 +430,7 @@ def yolo_v8(num_classes, ver, backbone_3D, fusion_module, pretrain_path=None):
         backbone3D = resnext.resnext101()
     elif backbone_3D == 'mobilenetv2':
         backbone3D = mobilenetv2.get_model()
-    elif backbone3D == 'shufflenetv2':
+    elif backbone_3D == 'shufflenetv2':
         backbone3D = shufflenetv2.get_model()
 
     return YOLO2Stream(width, depth, num_classes, backbone3D, fusion_module, pretrain_yolo, pretrain_path)

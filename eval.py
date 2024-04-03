@@ -19,7 +19,7 @@ import glob
 from math import sqrt
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.YOLO2Stream import yolo_v8_m
+from model.YOLO2Stream import yolo_v8
 from utils.util import non_max_suppression
 import tqdm
 from datasets.ucf.transforms import UCF_transform
@@ -131,7 +131,7 @@ def eval_on_UCF101(pretrain_path, size):
     dataloader = data.DataLoader(dataset, 32, False, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo_v8_m(num_classes=24, pretrain_path=pretrain_path)
+    model = yolo_v8(num_classes=24, ver='m', backbone_3D='mobilenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
     model.to("cuda")
     model.eval()
 
@@ -139,7 +139,7 @@ def eval_on_UCF101(pretrain_path, size):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_7.pth'
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_7.pth'
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)

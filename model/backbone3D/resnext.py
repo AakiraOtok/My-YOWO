@@ -181,7 +181,7 @@ class ResNeXt(nn.Module):
 #     else:
 #         raise ValueError("Unsupported ft_portion: 'complete' or 'last_layer' expected")
     
-    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/resnext-101-kinetics.pth'):
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/resnext-101-kinetics.pth'):
         
         state_dict = self.state_dict()
 

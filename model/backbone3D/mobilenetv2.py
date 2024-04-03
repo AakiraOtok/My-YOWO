@@ -126,7 +126,7 @@ class MobileNetV2(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    def load_pretrain(self, pretrain_path='/home/manh/Projects/My-YOWO/weights/backbone3D/kinetics_mobilenetv2_1.0x_RGB_16_best.pth'):
+    def load_pretrain(self, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/kinetics_mobilenetv2_1.0x_RGB_16_best.pth'):
         
         state_dict = self.state_dict()
 

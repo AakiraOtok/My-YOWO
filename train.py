@@ -74,7 +74,7 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
             for param_group in optimizer.param_groups: 
                 param_group['lr'] *= 0.333
 
-        torch.save(model.state_dict(), r"/home/manh/Projects/My-YOWO/weights/model_checkpoint/epoch_" + str(cur_epoch) + ".pth")
+        torch.save(model.state_dict(), r"/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_" + str(cur_epoch) + ".pth")
         print("Saved model at epoch : {}".format(cur_epoch))
         cur_epoch += 1
 
@@ -82,7 +82,7 @@ from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
 from model.YOLO2Stream import yolo_v8
 from utils.util import ComputeLoss
 
-def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = None):
+def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     root_path = "/home/manh/Datasets/UCF101-24/ucf242"
     split_path = "trainlist.txt"
     data_path = "rgb-images"
@@ -96,7 +96,7 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo_v8(num_classes=24, ver='m', backbone_3D='mobilenetv2', fusion_module='CSP', pretrain_path=pretrain_path)
+    model = yolo_v8(num_classes=24, ver='l', backbone_3D='shufflenetv2', fusion_module='CSP', pretrain_path=pretrain_path)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Tổng số lượng tham số: {total_params}")
     #sys.exit()
@@ -111,8 +111,8 @@ def train_on_UCF(img_size = (224, 224), version = "original", pretrain_path = No
 
 if __name__ == "__main__":
     pretrain_path = None
-    dataloader, model, criterion = train_on_UCF(version="original", img_size=(224, 224), pretrain_path=pretrain_path)
+    dataloader, model, criterion = train_on_UCF(img_size=(224, 224), pretrain_path=pretrain_path)
 
     optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-3, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4, 5, 6), max_epoch=9)   
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4, 5, 6), max_epoch=7)   
