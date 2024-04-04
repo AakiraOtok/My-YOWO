@@ -24,6 +24,7 @@ from utils.util import non_max_suppression
 import tqdm
 from datasets.ucf.transforms import UCF_transform
 from utils import util
+from model import testing
 
 
 @torch.no_grad()
@@ -61,7 +62,7 @@ def eval(model, dataloader):
 
         # NMS
         targets[:, 2:] *= torch.tensor((width, height, width, height)).cuda()  # to pixels
-        outputs = non_max_suppression(outputs, 0.25, 0.4)
+        outputs = non_max_suppression(outputs, 0.005, 0.5)
 
         # Metrics
         for i, output in enumerate(outputs):
@@ -131,15 +132,27 @@ def eval_on_UCF101(pretrain_path, size):
     dataloader = data.DataLoader(dataset, 32, False, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo_v8(num_classes=24, ver='m', backbone_3D='mobilenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
+    model = yolo_v8(num_classes=24, ver='l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
     model.to("cuda")
     model.eval()
 
     return model, dataloader
 
+def call_eval(pretrain_path):
+    size          = (224, 224)
+    model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)
+    map50, mean_ap = eval(model, dataloader)
+    print(map50)
+    print()
+    print("=================================================================")
+    print()
+    print(mean_ap)
+    return map50, mean_ap
+    
+
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_7.pth'
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_1.pth'
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)

@@ -392,11 +392,19 @@ class ComputeLoss:
                                                             anchor_points * stride_tensor)
 
         target_bboxes /= stride_tensor
-        target_scores_sum = target_scores.sum()
+        # target_scores_sum = target_scores.sum()
 
         # cls loss
-        loss_cls = self.bce(pred_scores, target_scores.to(pred_scores.dtype))
-        loss_cls = loss_cls.sum() / target_scores_sum
+        loss_cls_pos = self.bce(pred_scores[fg_mask], target_scores[fg_mask].to(pred_scores.dtype)).sum(dim=1)
+        loss_cls_neg = self.bce(pred_scores[~fg_mask], target_scores[~fg_mask].to(pred_scores.dtype)).sum(dim=1)
+
+        ratio = 3
+        num_pos = loss_cls_pos.shape[0]
+        
+        loss_cls_neg, _ = torch.sort(loss_cls_neg, descending=True)
+        loss_cls_neg = loss_cls_neg[: num_pos * ratio]
+
+        loss_cls = (loss_cls_pos.sum() + loss_cls_neg.sum()) / num_pos
 
         # box loss
         loss_box = torch.zeros(1, device=self.device)
@@ -405,18 +413,20 @@ class ComputeLoss:
             # IoU loss
             weight = torch.masked_select(target_scores.sum(-1), fg_mask).unsqueeze(-1)
             loss_box = self.iou(pred_bboxes[fg_mask], target_bboxes[fg_mask])
-            loss_box = ((1.0 - loss_box) * weight).sum() / target_scores_sum
+            loss_box = ((1.0 - loss_box) * weight).sum() / num_pos
             # DFL loss
             a, b = torch.split(target_bboxes, 2, -1)
             target_lt_rb = torch.cat((anchor_points - a, b - anchor_points), -1)
             target_lt_rb = target_lt_rb.clamp(0, self.dfl_ch - 1.01)  # distance (left_top, right_bottom)
             loss_dfl = self.df_loss(pred_output[fg_mask].view(-1, self.dfl_ch), target_lt_rb[fg_mask])
-            loss_dfl = (loss_dfl * weight).sum() / target_scores_sum
+            loss_dfl = (loss_dfl * weight).sum() / num_pos
 
 
         loss_cls *= 0.5
         loss_box *= 7.5
         loss_dfl *= 1.5
+
+        #print("cls : {}, box : {}, dfl : {}".format(loss_cls, loss_box, loss_dfl))
         return loss_cls + loss_box + loss_dfl  # loss(cls, box, dfl)
 
     @torch.no_grad()
