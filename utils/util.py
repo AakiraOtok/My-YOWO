@@ -6,6 +6,7 @@ import time
 import numpy
 import torch
 import torchvision
+import sys
 from torch.nn.functional import cross_entropy, one_hot
 
 
@@ -390,21 +391,54 @@ class ComputeLoss:
         target_bboxes, target_scores, fg_mask = self.assign(scores, bboxes,
                                                             gt_labels, gt_bboxes, mask_gt,
                                                             anchor_points * stride_tensor)
+        
+        mask = target_scores.gt(0)[fg_mask]
 
         target_bboxes /= stride_tensor
         # target_scores_sum = target_scores.sum()
 
+        #######################################################################################################
         # cls loss
-        loss_cls_pos = self.bce(pred_scores[fg_mask], target_scores[fg_mask].to(pred_scores.dtype)).sum(dim=1)
-        loss_cls_neg = self.bce(pred_scores[~fg_mask], target_scores[~fg_mask].to(pred_scores.dtype)).sum(dim=1)
+        loss_cls_pos = self.bce(pred_scores[fg_mask], target_scores[fg_mask].to(pred_scores.dtype))
+        loss_cls_neg = self.bce(pred_scores[~fg_mask], target_scores[~fg_mask].to(pred_scores.dtype))
 
-        ratio = 3
-        num_pos = loss_cls_pos.shape[0]
+        loss_cls_neg = torch.cat((loss_cls_pos[~mask], loss_cls_neg.view(-1)), dim=0)
+
+        ratio = 5
+        num_pos = mask.sum()
         
         loss_cls_neg, _ = torch.sort(loss_cls_neg, descending=True)
         loss_cls_neg = loss_cls_neg[: num_pos * ratio]
 
-        loss_cls = (loss_cls_pos.sum() + loss_cls_neg.sum()) / num_pos
+        #print(num_pos)
+        #print(loss_cls_pos[mask].sum())
+        #print(loss_cls_neg.sum())
+        #sys.exit()
+
+        loss_cls = (loss_cls_pos[mask].sum() + loss_cls_neg.sum()) / num_pos
+        ########################################################################################################
+
+        ########################################################################################################
+        # cls loss
+        #pos_scores = pred_scores[fg_mask][mask].sigmoid()
+        #neg_scores = torch.cat((pred_scores[fg_mask][~mask], pred_scores[~fg_mask].view(-1)), dim=0).sigmoid()
+
+        #alpha = 0.75
+        #gamma = 2.
+        #eps = 1e-9
+        #num_pos = mask.sum()
+
+        ##print(num_pos)
+        ##print(loss_cls_pos[mask].sum())
+        ##print(loss_cls_neg.sum())
+        ##sys.exit()
+
+        #pos_loss = - (1 - pos_scores) ** gamma * torch.log(pos_scores + eps) 
+        #neg_loss = - neg_scores ** gamma * torch.log(1. - neg_scores + eps)
+        #loss_cls = (pos_loss.sum() + neg_loss.sum()) / num_pos
+        ########################################################################################################
+
+        #print("loss_cls : {}, pos_los : {}, neg_loss : {}".format(loss_cls.sum().item(), pos_loss.sum().item(), neg_loss.sum().item()))
 
         # box loss
         loss_box = torch.zeros(1, device=self.device)
@@ -422,15 +456,23 @@ class ComputeLoss:
             loss_dfl = (loss_dfl * weight).sum() / num_pos
 
 
-        loss_cls *= 0.5
+        loss_cls *= 1.
         loss_box *= 7.5
         loss_dfl *= 1.5
 
-        #print("cls : {}, box : {}, dfl : {}".format(loss_cls, loss_box, loss_dfl))
+        #print("cls : {}, box : {}, dfl : {}".format(loss_cls.item(), loss_box.item(), loss_dfl.item()))
         return loss_cls + loss_box + loss_dfl  # loss(cls, box, dfl)
 
     @torch.no_grad()
     def assign(self, pred_scores, pred_bboxes, true_labels, true_bboxes, true_mask, anchors):
+        # print(pred_scores.shape) [B, 1029, nclass]
+        # print(pred_bboxes.shape) [B, 1029, 4]
+        # print(true_bboxes.shape) [B, nbox, 4]
+        # print(true_labels.shape) #[B, nbox, 1]
+        # print(true_mask.shape) #[B, nbox, 1]
+        # print(anchors.shape) #[1029, 2]
+        # there are some fake box for shape purpose
+
         """
         Task-aligned One-stage Object Detection assigner
         """
@@ -445,39 +487,79 @@ class ComputeLoss:
                     torch.zeros_like(pred_scores[..., 0]).to(device),
                     torch.zeros_like(pred_scores[..., 0]).to(device))
 
+        # [2, B, nbox]
         i = torch.zeros([2, self.bs, self.num_max_boxes], dtype=torch.long)
         i[0] = torch.arange(end=self.bs).view(-1, 1).repeat(1, self.num_max_boxes)
         i[1] = true_labels.long().squeeze(-1)
 
+        # [B, nbox, 1029, 1]
         overlaps = self.iou(true_bboxes.unsqueeze(2), pred_bboxes.unsqueeze(1))
+        # [B, nbox, 1029]
         overlaps = overlaps.squeeze(3).clamp(0)
+
+        # [B, nbox, 1029]
         align_metric = pred_scores[i[0], :, i[1]].pow(self.alpha) * overlaps.pow(self.beta)
+        
         bs, n_boxes, _ = true_bboxes.shape
+
+        # [B * nbox, 1, 2]
         lt, rb = true_bboxes.view(-1, 1, 4).chunk(2, 2)  # left-top, right-bottom
+
+        # [B * nbox, 1029, 4], offset for box regression
         bbox_deltas = torch.cat((anchors[None] - lt, rb - anchors[None]), dim=2)
+
+        # [B, nbox, 1029]
         mask_in_gts = bbox_deltas.view(bs, n_boxes, anchors.shape[0], -1).amin(3).gt_(1e-9)
+        
+        # [B, nbox, 1029]
         metrics = align_metric * mask_in_gts
+
+        # [B, nbox, top_k]
         top_k_mask = true_mask.repeat([1, 1, self.top_k]).bool()
+        
         num_anchors = metrics.shape[-1]
+
+        # [B, nbox, top_k]
         top_k_metrics, top_k_indices = torch.topk(metrics, self.top_k, dim=-1, largest=True)
+    
         if top_k_mask is None:
             top_k_mask = (top_k_metrics.max(-1, keepdim=True) > self.eps).tile([1, 1, self.top_k])
+        
+        # [B, nbox, top_k]
         top_k_indices = torch.where(top_k_mask, top_k_indices, 0)
+        
+        # [B, nbox, 1029]
         is_in_top_k = one_hot(top_k_indices, num_anchors).sum(-2)
+
         # filter invalid boxes
         is_in_top_k = torch.where(is_in_top_k > 1, 0, is_in_top_k)
         mask_top_k = is_in_top_k.to(metrics.dtype)
         # merge all mask to a final mask, (b, max_num_obj, h*w)
         mask_pos = mask_top_k * mask_in_gts * true_mask
 
+        # [B, 1029]
         fg_mask = mask_pos.sum(-2)
+
         if fg_mask.max() > 1:  # one anchor is assigned to multiple gt_bboxes
+
+            # [B, nbox, 1029]
             mask_multi_gts = (fg_mask.unsqueeze(1) > 1).repeat([1, self.num_max_boxes, 1])
+
+            # [B, 1029]
             max_overlaps_idx = overlaps.argmax(1)
+
+            # [B, 1029, nbox]
             is_max_overlaps = one_hot(max_overlaps_idx, self.num_max_boxes)
+
+            # [B, nbox, 1029]
             is_max_overlaps = is_max_overlaps.permute(0, 2, 1).to(overlaps.dtype)
+            
+            # [B, nbox, 1029] 
             mask_pos = torch.where(mask_multi_gts, is_max_overlaps, mask_pos)
+
+            # [B, 1029]
             fg_mask = mask_pos.sum(-2)
+            
         # find each grid serve which gt(index)
         target_gt_idx = mask_pos.argmax(-2)  # (b, h*w)
 
@@ -503,7 +585,8 @@ class ComputeLoss:
         pos_overlaps = (overlaps * mask_pos).amax(axis=-1, keepdim=True)
         norm_align_metric = (align_metric * pos_overlaps / (pos_align_metrics + self.eps)).amax(-2)
         norm_align_metric = norm_align_metric.unsqueeze(-1)
-        target_scores = target_scores * norm_align_metric
+        #target_scores = target_scores * norm_align_metric
+        target_scores = target_scores
 
         return target_bboxes, target_scores, fg_mask.bool()
 

@@ -26,13 +26,13 @@ def warmup_learning_rate(optimizer, step):
     max_step = 500.0
     if (step > max_step):
         return
-    lr_init = 1e-3
+    lr_init = 1e-4
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr_init * step / max_step
 
 def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
-    cur_epoch = 2
+    cur_epoch = 1
     loss_acc = 0.0
     ema = EMA(model)
 
@@ -60,7 +60,7 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
             targets = torch.cat(targets, dim=0)
 
 
-            loss = criterion(outputs, targets) * 8 / acc_grad
+            loss = criterion(outputs, targets) / acc_grad
             loss_acc += loss.item()
             loss.backward()
             #plot_grad_flow(model.named_parameters()) #model too large, can't see anything!
@@ -82,23 +82,27 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
         if cur_epoch in adjustlr_schedule:
             for param_group in optimizer.param_groups: 
-                param_group['lr'] *= 0.333
+                param_group['lr'] *= 0.5
         
         #          model.state_dict()
+        save_path_ema = r"/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_" + str(cur_epoch) + ".pth"
+        torch.save(ema.ema.state_dict(), save_path_ema)
+
         save_path = r"/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_" + str(cur_epoch) + ".pth"
-        torch.save(ema.ema.state_dict(), save_path)
+        torch.save(model.state_dict(), save_path)
+
         print("Saved model at epoch : {}".format(cur_epoch))
 
-        log_path = '/home/manh/Projects/YOLO2Stream/training.log'
-        map50, mean_ap = call_eval(save_path)
-        logging.basicConfig(filename=log_path, level=logging.INFO)
-        logging.info('mAP 0.5 : {}, mAP : {}'.format(map50, mean_ap))
+        #log_path = '/home/manh/Projects/YOLO2Stream/training.log'
+        #map50, mean_ap = call_eval(save_path)
+        #logging.basicConfig(filename=log_path, level=logging.INFO)
+        #logging.info('mAP 0.5 : {}, mAP : {}'.format(map50, mean_ap))
 
         cur_epoch += 1
 
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.YOLO2Stream import yolo_v8
+from model.YOLO2Stream import yolo2stream
 from utils.util import ComputeLoss
 from model import testing
 
@@ -116,7 +120,7 @@ def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo_v8(num_classes=24, ver='l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
+    model = yolo2stream(num_classes=24, backbone_2D='yolov8_l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Tổng số lượng tham số: {total_params}")
     #sys.exit()
@@ -130,9 +134,9 @@ def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_1.pth'
+    pretrain_path = None 
     dataloader, model, criterion = train_on_UCF(img_size=(224, 224), pretrain_path=pretrain_path)
 
-    optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-3, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-4, weight_decay=5e-4)
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), max_epoch=9)   
+    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4), max_epoch=7)   

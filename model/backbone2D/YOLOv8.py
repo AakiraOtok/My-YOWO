@@ -2,20 +2,8 @@ import math
 
 import torch
 
-def make_anchors(x, strides, offset=0.5):
-    """
-    Generate anchors from features
-    """
-    assert x is not None
-    anchor_points, stride_tensor = [], []
-    for i, stride in enumerate(strides):
-        _, _, h, w = x[i].shape
-        sx = torch.arange(end=w, dtype=x[i].dtype, device=x[i].device) + offset  # shift x
-        sy = torch.arange(end=h, dtype=x[i].dtype, device=x[i].device) + offset  # shift y
-        sy, sx = torch.meshgrid(sy, sx)
-        anchor_points.append(torch.stack((sx, sy), -1).view(-1, 2))
-        stride_tensor.append(torch.full((h * w, 1), stride, dtype=x[i].dtype, device=x[i].device))
-    return torch.cat(anchor_points), torch.cat(stride_tensor)
+from utils.util import make_anchors
+
 
 def pad(k, p=None, d=1):
     if d > 1:
@@ -147,16 +135,14 @@ class DarkFPN(torch.nn.Module):
         return h2, h4, h6
 
 class YOLO(torch.nn.Module):
-    def __init__(self, width, depth):
+    def __init__(self, width, depth, num_classes):
         super().__init__()
         self.net = DarkNet(width, depth)
         self.fpn = DarkFPN(width, depth)
 
     def forward(self, x):
         x = self.net(x)
-        x = self.fpn(x)
-        return x
-
+        return self.fpn(x)
 
     def fuse(self):
         for m in self.modules():
@@ -165,44 +151,44 @@ class YOLO(torch.nn.Module):
                 m.forward = m.fuse_forward
                 delattr(m, 'norm')
         return self
-    
-    def load_pretrain(self, pretrain_path = "/home/manh/Projects/My-YOWO/weights/backbone2D/YOLOv8/v8_m.pth"):
+
+    def load_pretrain(self, pretrain_path):
         state_dict = self.state_dict()
 
         pretrain_state_dict = torch.load(pretrain_path)
-        
-        for param_name, value in pretrain_state_dict.items():
+        for param_name, value in pretrain_state_dict['state_dict'].items():
             if param_name not in state_dict:
                 continue
             state_dict[param_name] = value
             
         self.load_state_dict(state_dict)
 
-def yolo_v8_n(pretrain_path = None):
+
+def yolo_v8_n(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_n.pth'):
     depth = [1, 2, 2]
     width = [3, 16, 32, 64, 128, 256]
-    return YOLO(width, depth, pretrain_path=pretrain_path)
+    return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_s(pretrain_path = None):
+def yolo_v8_s(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_s.pth'):
     depth = [1, 2, 2]
     width = [3, 32, 64, 128, 256, 512]
-    return YOLO(width, depth)
+    return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_m(pretrain_path = None):
+def yolo_v8_m(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_m.pth'):
     depth = [2, 4, 4]
     width = [3, 48, 96, 192, 384, 576]
-    return YOLO(width, depth)
+    return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_l(pretrain_path = None):
+def yolo_v8_l(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_l.pth'):
     depth = [3, 6, 6]
     width = [3, 64, 128, 256, 512, 512]
-    return YOLO(width, depth)
+    return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_x(pretrain_path = None):
+def yolo_v8_x(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_x.pth'):
     depth = [3, 6, 6]
     width = [3, 80, 160, 320, 640, 640]
-    return YOLO(width, depth)
+    return YOLO(width, depth, pretrain_path)

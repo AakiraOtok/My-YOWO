@@ -104,7 +104,7 @@ class InvertedResidual(nn.Module):
 
 
 class ShuffleNetV2(nn.Module):
-    def __init__(self, num_classes=600, sample_size=112, width_mult=1.):
+    def __init__(self, num_classes=600, sample_size=112, width_mult=1., pretrain_path=None):
         super(ShuffleNetV2, self).__init__()
         assert sample_size % 16 == 0
         
@@ -147,6 +147,9 @@ class ShuffleNetV2(nn.Module):
         # building last several layers
         self.conv_last      = conv_1x1x1_bn(input_channel, self.stage_out_channels[-1])
         self.avgpool        = nn.AvgPool3d((2, 1, 1), stride=1)
+
+        if pretrain_path is not None:
+            self.load_pretrain(pretrain_path=pretrain_path)
     
 
     def forward(self, x):
@@ -160,7 +163,7 @@ class ShuffleNetV2(nn.Module):
 
         return out
     
-    def load_pretrain(self, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/kinetics_shufflenetv2_1.0x_RGB_16_best.pth'):
+    def load_pretrain(self, pretrain_path):
         
         state_dict = self.state_dict()
 
@@ -199,7 +202,7 @@ def get_model(**kwargs):
     """
     Returns the model.
     """
-    model = ShuffleNetV2(**kwargs)
+    model = ShuffleNetV2(**kwargs, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/kinetics_shufflenetv2_1.0x_RGB_16_best.pth')
     return model
    
 

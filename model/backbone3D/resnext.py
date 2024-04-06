@@ -76,7 +76,7 @@ class ResNeXt(nn.Module):
                  block,
                  layers,
                  shortcut_type='B',
-                 cardinality=32):
+                 cardinality=32, pretrain_path=None):
         self.inplanes = 64
         super(ResNeXt, self).__init__()
         self.conv1 = nn.Conv3d(
@@ -110,6 +110,9 @@ class ResNeXt(nn.Module):
             elif isinstance(m, nn.BatchNorm3d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+
+        if pretrain_path is not None:
+            self.load_pretrain(pretrain_path=pretrain_path)
 
     def _make_layer(self,
                     block,
@@ -181,7 +184,7 @@ class ResNeXt(nn.Module):
 #     else:
 #         raise ValueError("Unsupported ft_portion: 'complete' or 'last_layer' expected")
     
-    def load_pretrain(self, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/resnext-101-kinetics.pth'):
+    def load_pretrain(self, pretrain_path):
         
         state_dict = self.state_dict()
 
@@ -204,7 +207,7 @@ def resnext50(**kwargs):
 def resnext101(**kwargs):
     """Constructs a ResNet-101 model.
     """
-    model = ResNeXt(ResNeXtBottleneck, [3, 4, 23, 3], **kwargs)
+    model = ResNeXt(ResNeXtBottleneck, [3, 4, 23, 3], **kwargs, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/resnext-101-kinetics.pth')
     return model
 
 

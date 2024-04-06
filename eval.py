@@ -19,7 +19,7 @@ import glob
 from math import sqrt
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.YOLO2Stream import yolo_v8
+from model.YOLO2Stream import yolo2stream
 from utils.util import non_max_suppression
 import tqdm
 from datasets.ucf.transforms import UCF_transform
@@ -31,7 +31,8 @@ from model import testing
 def eval(model, dataloader):
 
     # Configure
-    iou_v = torch.linspace(0.5, 0.95, 10).cuda()  # iou vector for mAP@0.5:0.95
+    #iou_v = torch.linspace(0.5, 0.95, 10).cuda()  # iou vector for mAP@0.5:0.95
+    iou_v = torch.tensor([0.5])
     n_iou = iou_v.numel()
 
     m_pre = 0.
@@ -152,7 +153,7 @@ def call_eval(pretrain_path):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/epoch_1.pth'
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_1.pth'
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)
