@@ -150,7 +150,6 @@ class ShuffleNetV2(nn.Module):
 
         if pretrain_path is not None:
             self.load_pretrain(pretrain_path=pretrain_path)
-    
 
     def forward(self, x):
         out = self.conv1(x)
@@ -174,6 +173,8 @@ class ShuffleNetV2(nn.Module):
             state_dict[param_name] = value
             
         self.load_state_dict(state_dict)
+
+        print("backbone3D pretrained loaded!")
 
 
 def get_fine_tuning_parameters(model, ft_portion):

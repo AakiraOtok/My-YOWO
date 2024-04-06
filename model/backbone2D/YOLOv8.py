@@ -135,10 +135,13 @@ class DarkFPN(torch.nn.Module):
         return h2, h4, h6
 
 class YOLO(torch.nn.Module):
-    def __init__(self, width, depth, num_classes):
+    def __init__(self, width, depth, pretrain_path):
         super().__init__()
         self.net = DarkNet(width, depth)
         self.fpn = DarkFPN(width, depth)
+
+        if pretrain_path is not None:
+            self.load_pretrain(pretrain_path)
 
     def forward(self, x):
         x = self.net(x)
@@ -156,12 +159,15 @@ class YOLO(torch.nn.Module):
         state_dict = self.state_dict()
 
         pretrain_state_dict = torch.load(pretrain_path)
-        for param_name, value in pretrain_state_dict['state_dict'].items():
+        
+        for param_name, value in pretrain_state_dict.items():
             if param_name not in state_dict:
                 continue
             state_dict[param_name] = value
             
         self.load_state_dict(state_dict)
+
+        print("backbone2D pretrained loaded!")
 
 
 def yolo_v8_n(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_n.pth'):

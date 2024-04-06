@@ -129,7 +129,6 @@ class Head(torch.nn.Module):
                                                            nn.Conv2d(c2, 4 * self.ch, 1)) for x in filters)
 
     def forward(self, x):
-        ft = []
         for i in range(self.nl):
             #print(self.box[i](x[i]).shape) [B, 4 * n_dfl_channel, H, W]
             #print(self.cls[i](x[i]).shape) [B, nclass, H, W]
