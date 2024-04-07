@@ -32,7 +32,7 @@ def warmup_learning_rate(optimizer, step):
 
 def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
-    cur_epoch = 1
+    cur_epoch = 3
     loss_acc = 0.0
     ema = EMA(model)
 
@@ -134,9 +134,9 @@ def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = None 
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_2.pth'
     dataloader, model, criterion = train_on_UCF(img_size=(224, 224), pretrain_path=pretrain_path)
 
-    optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-4, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=model.parameters(), lr= 0.25 * 1e-4, weight_decay=5e-4)
 
     train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4), max_epoch=7)   

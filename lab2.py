@@ -9,3 +9,6 @@ for x in out:
 
 total_params = sum(p.numel() for p in model.parameters())
 print(f"Tổng số lượng tham số: {total_params}")
+
+for x in model.detection_head.modules():
+    print(x)

@@ -20,7 +20,7 @@ import glob
 from math import sqrt
 
 from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
-from model.YOLO2Stream import yolo_v8
+from model.YOLO2Stream import yolo2stream
 from utils.box_utils import draw_bounding_box
 from utils.util import non_max_suppression
 from datasets.ucf.transforms import UCF_transform, Augmentation
@@ -62,12 +62,14 @@ def detect(dataset, model, num_classes=21, mapping=UCF101_idx2name):
         clip = clip.unsqueeze(0).to("cuda")
         outputs = model(clip)
         outputs = non_max_suppression(outputs, conf_threshold=0.3, iou_threshold=0.5)[0]
+
         #print(outputs[0])
         #sys.exit()
         #print(bboxes)
 
         origin_image = cv2.resize(origin_image, (224, 224))
-        draw_bounding_box(origin_image, outputs[:, :4], outputs[:, 5], outputs[:, 4], mapping)
+        print(outputs[0:1, :4])
+        draw_bounding_box(origin_image, outputs[0:1, :4], outputs[0:1, 5], outputs[0:1, 4], mapping)
         cv2.imshow('img', origin_image)
         k = cv2.waitKey()
 
@@ -101,8 +103,8 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
 
     #model = MyYOWO(n_classes=25, pretrain_path=pretrain_path)
     #model = superYOWO(num_classes=25, pretrain_path=pretrain_path)
-    model = yolo_v8(num_classes=24, ver='l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)    
-        
+    model = yolo2stream(num_classes=24, backbone_2D='yolov8_l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
+
     num_classes = 24
     mapping = UCF101_idx2name
     return dataset, model, num_classes, mapping
@@ -110,7 +112,7 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_2.pth' 
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_3.pth'
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()

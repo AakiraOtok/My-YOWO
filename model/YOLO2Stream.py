@@ -337,11 +337,8 @@ class YOLO2Stream(torch.nn.Module):
                 if c.bias is not None:
                     nn.init.constant_(c.bias, 0.)
 
-        for c in self.detection_head.modules():
-            if isinstance(c, nn.Conv2d):
-                nn.init.kaiming_normal_(c.weight)
-                if c.bias is not None:
-                    nn.init.constant_(c.bias, 0.)
+        self.detection_head.initialize_biases()
+
 
 def yolo2stream(num_classes, backbone_2D, backbone_3D, fusion_module, pretrain_path=None):
 

@@ -395,27 +395,29 @@ class ComputeLoss:
         mask = target_scores.gt(0)[fg_mask]
 
         target_bboxes /= stride_tensor
-        # target_scores_sum = target_scores.sum()
+        target_scores_sum = target_scores.sum()
 
         #######################################################################################################
         # cls loss
-        loss_cls_pos = self.bce(pred_scores[fg_mask], target_scores[fg_mask].to(pred_scores.dtype))
-        loss_cls_neg = self.bce(pred_scores[~fg_mask], target_scores[~fg_mask].to(pred_scores.dtype))
+        #loss_cls_pos = self.bce(pred_scores[fg_mask], target_scores[fg_mask].to(pred_scores.dtype))
+        #loss_cls_neg = self.bce(pred_scores[~fg_mask], target_scores[~fg_mask].to(pred_scores.dtype))
 
-        loss_cls_neg = torch.cat((loss_cls_pos[~mask], loss_cls_neg.view(-1)), dim=0)
+        #loss_cls_neg = torch.cat((loss_cls_pos[~mask], loss_cls_neg.view(-1)), dim=0)
 
-        ratio = 5
-        num_pos = mask.sum()
+        #ratio = 1
+        #num_pos = mask.sum()
         
-        loss_cls_neg, _ = torch.sort(loss_cls_neg, descending=True)
-        loss_cls_neg = loss_cls_neg[: num_pos * ratio]
+        #loss_cls_neg, _ = torch.sort(loss_cls_neg, descending=True)
+        #loss_cls_neg = loss_cls_neg[: num_pos * ratio]
 
-        #print(num_pos)
-        #print(loss_cls_pos[mask].sum())
-        #print(loss_cls_neg.sum())
-        #sys.exit()
+        ##print(num_pos)
+        ##print(loss_cls_pos[mask].sum())
+        ##print(loss_cls_neg.sum())
+        ##sys.exit()
 
-        loss_cls = (loss_cls_pos[mask].sum() + loss_cls_neg.sum()) / num_pos
+        #loss_cls = (loss_cls_pos[mask].sum() + loss_cls_neg.sum()) / num_pos
+        #print("loss_cls : {}, pos_los : {}, neg_loss : {}".format(loss_cls.sum().item(), loss_cls_pos[mask].sum().item(), loss_cls_neg.sum().item()))
+        
         ########################################################################################################
 
         ########################################################################################################
@@ -433,12 +435,16 @@ class ComputeLoss:
         ##print(loss_cls_neg.sum())
         ##sys.exit()
 
-        #pos_loss = - (1 - pos_scores) ** gamma * torch.log(pos_scores + eps) 
-        #neg_loss = - neg_scores ** gamma * torch.log(1. - neg_scores + eps)
+        #pos_loss = - alpha * (1 - pos_scores) ** gamma * torch.log(pos_scores + eps) 
+        #neg_loss = - (1 - alpha) * neg_scores ** gamma * torch.log(1. - neg_scores + eps)
         #loss_cls = (pos_loss.sum() + neg_loss.sum()) / num_pos
         ########################################################################################################
 
         #print("loss_cls : {}, pos_los : {}, neg_loss : {}".format(loss_cls.sum().item(), pos_loss.sum().item(), neg_loss.sum().item()))
+
+        # cls loss
+        loss_cls = self.bce(pred_scores, target_scores.to(pred_scores.dtype))
+        loss_cls = loss_cls.sum() / target_scores_sum
 
         # box loss
         loss_box = torch.zeros(1, device=self.device)
@@ -447,13 +453,13 @@ class ComputeLoss:
             # IoU loss
             weight = torch.masked_select(target_scores.sum(-1), fg_mask).unsqueeze(-1)
             loss_box = self.iou(pred_bboxes[fg_mask], target_bboxes[fg_mask])
-            loss_box = ((1.0 - loss_box) * weight).sum() / num_pos
+            loss_box = ((1.0 - loss_box) * weight).sum() / target_scores_sum
             # DFL loss
             a, b = torch.split(target_bboxes, 2, -1)
             target_lt_rb = torch.cat((anchor_points - a, b - anchor_points), -1)
             target_lt_rb = target_lt_rb.clamp(0, self.dfl_ch - 1.01)  # distance (left_top, right_bottom)
             loss_dfl = self.df_loss(pred_output[fg_mask].view(-1, self.dfl_ch), target_lt_rb[fg_mask])
-            loss_dfl = (loss_dfl * weight).sum() / num_pos
+            loss_dfl = (loss_dfl * weight).sum() / target_scores_sum
 
 
         loss_cls *= 1.
