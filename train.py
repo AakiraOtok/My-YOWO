@@ -32,7 +32,7 @@ def warmup_learning_rate(optimizer, step):
 
 def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
     torch.backends.cudnn.benchmark = True
-    cur_epoch = 3
+    cur_epoch = 1
     loss_acc = 0.0
     ema = EMA(model)
 
@@ -51,14 +51,15 @@ def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5
 
             targets = []
             for i, (bboxes, labels) in enumerate(zip(batch_bboxes, batch_labels)):
-                target = torch.Tensor(bboxes.shape[0], 6)
+                nbox = bboxes.shape[0]
+                nclass = labels.shape[1]
+                target = torch.Tensor(nbox, 5 + nclass)
                 target[:, 0] = i
-                target[:, 1] = labels
-                target[:, 2:] = bboxes
+                target[:, 1:5] = bboxes
+                target[:, 5:] = labels
                 targets.append(target)
 
             targets = torch.cat(targets, dim=0)
-
 
             loss = criterion(outputs, targets) / acc_grad
             loss_acc += loss.item()
@@ -134,9 +135,9 @@ def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_2.pth'
+    pretrain_path = None
     dataloader, model, criterion = train_on_UCF(img_size=(224, 224), pretrain_path=pretrain_path)
 
-    optimizer  = optim.AdamW(params=model.parameters(), lr= 0.25 * 1e-4, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-4, weight_decay=5e-4)
 
     train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4), max_epoch=7)   

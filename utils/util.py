@@ -328,7 +328,8 @@ class ComputeLoss:
         # DFL Loss params
         self.dfl_ch = m.dfl.ch
         self.project = torch.arange(self.dfl_ch, dtype=torch.float, device=device)
-
+    #                                 img_idx + 4 corrdinate + nclass
+    #                           [nbox, 1 + 4 + nclass]
     def __call__(self, outputs, targets):
 
         # [B, 4 * n_dfl_channel + num_classes, 14, 14]  (28, 14, 7)
@@ -345,6 +346,7 @@ class ComputeLoss:
 
         # [B, 1029, num_classes]
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+        nclass = pred_scores.shape[2]
 
 
         size = torch.tensor(x[0].shape[2:], dtype=pred_scores.dtype, device=self.device)
@@ -354,20 +356,20 @@ class ComputeLoss:
 
         # targets
         if targets.shape[0] == 0:
-            gt = torch.zeros(pred_scores.shape[0], 0, 5, device=self.device)
+            gt = torch.zeros(pred_scores.shape[0], 0, 4 + nclass, device=self.device)
         else:
             i = targets[:, 0]  # image index
             _, counts = i.unique(return_counts=True)
-            gt = torch.zeros(pred_scores.shape[0], counts.max(), 5, device=self.device)
+            gt = torch.zeros(pred_scores.shape[0], counts.max(), 4 +  nclass, device=self.device)
             for j in range(pred_scores.shape[0]):
                 matches = i == j
                 n = matches.sum()
                 if n:
                     gt[j, :n] = targets[matches, 1:]
             #gt[..., 1:5] = wh2xy(gt[..., 1:5].mul_(size[[1, 0, 1, 0]]))
-            gt[..., 1:5] = gt[..., 1:5].mul_(size[[1, 0, 1, 0]])
+            gt[..., 0:4] = gt[..., 0:4].mul_(size[[1, 0, 1, 0]])
 
-        gt_labels, gt_bboxes = gt.split((1, 4), 2)  # cls, xyxy
+        gt_bboxes, gt_labels = gt.split((4, nclass), 2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
 
         # boxes
@@ -474,7 +476,7 @@ class ComputeLoss:
         # print(pred_scores.shape) [B, 1029, nclass]
         # print(pred_bboxes.shape) [B, 1029, 4]
         # print(true_bboxes.shape) [B, nbox, 4]
-        # print(true_labels.shape) #[B, nbox, 1]
+        # print(true_labels.shape) #[B, nbox, nclass]
         # print(true_mask.shape) #[B, nbox, 1]
         # print(anchors.shape) #[1029, 2]
         # there are some fake box for shape purpose
@@ -485,6 +487,8 @@ class ComputeLoss:
         self.bs = pred_scores.size(0)
         self.num_max_boxes = true_bboxes.size(1)
 
+        # need to be changed !
+        ###################################################################################
         if self.num_max_boxes == 0:
             device = true_bboxes.device
             return (torch.full_like(pred_scores[..., 0], self.nc).to(device),
@@ -492,19 +496,32 @@ class ComputeLoss:
                     torch.zeros_like(pred_scores).to(device),
                     torch.zeros_like(pred_scores[..., 0]).to(device),
                     torch.zeros_like(pred_scores[..., 0]).to(device))
+        ##################################################################################
 
         # [2, B, nbox]
-        i = torch.zeros([2, self.bs, self.num_max_boxes], dtype=torch.long)
-        i[0] = torch.arange(end=self.bs).view(-1, 1).repeat(1, self.num_max_boxes)
-        i[1] = true_labels.long().squeeze(-1)
+        #i = torch.zeros([2, self.bs, self.num_max_boxes], dtype=torch.long)
+        #i[0] = torch.arange(end=self.bs).view(-1, 1).repeat(1, self.num_max_boxes)
+        #i[1] = true_labels.long()
 
         # [B, nbox, 1029, 1]
         overlaps = self.iou(true_bboxes.unsqueeze(2), pred_bboxes.unsqueeze(1))
         # [B, nbox, 1029]
         overlaps = overlaps.squeeze(3).clamp(0)
 
+        # [B, nbox, 1029] [B, 1029, nclass] [B, nbox, nclass]
+        #align_metric = pred_scores[i[0], :, i[1]].pow(self.alpha) * overlaps.pow(self.beta)
+
+        # [B, 1029, nbox, nclass]
+        pred_scores_loss = pred_scores.unsqueeze(-2).repeat([1, 1, overlaps.shape[1], 1]).sigmoid()
+
+        # [B, 1, nbox, nclass]
+        true_scores      = true_labels.unsqueeze(1).repeat([1, pred_scores_loss.shape[1], 1, 1])
+
         # [B, nbox, 1029]
-        align_metric = pred_scores[i[0], :, i[1]].pow(self.alpha) * overlaps.pow(self.beta)
+        #scores_loss = true_scores * torch.log(pred_scores_loss + self.eps) + (1 - true_scores) * torch.log(1 - pred_scores_loss + self.eps)
+        scores_loss = self.bce(pred_scores_loss, true_scores).sum(-1).permute(0, 2, 1).contiguous()
+        
+        align_metric = overlaps / scores_loss
         
         bs, n_boxes, _ = true_bboxes.shape
 
@@ -574,14 +591,17 @@ class ComputeLoss:
                                    dtype=torch.int64,
                                    device=true_labels.device)[..., None]
         target_gt_idx = target_gt_idx + batch_index * self.num_max_boxes
-        target_labels = true_labels.long().flatten()[target_gt_idx]
+
+        # [B, 1029, nclass]
+        target_labels = true_labels.long().view(-1, true_labels.shape[-1])[target_gt_idx]
 
         # assigned target boxes
         target_bboxes = true_bboxes.view(-1, 4)[target_gt_idx]
 
         # assigned target scores
         target_labels.clamp(0)
-        target_scores = one_hot(target_labels, self.nc)
+        #target_scores = one_hot(target_labels, self.nc)
+        target_scores = target_labels
         fg_scores_mask = fg_mask[:, :, None].repeat(1, 1, self.nc)
         target_scores = torch.where(fg_scores_mask > 0, target_scores, 0)
 

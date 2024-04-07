@@ -5,9 +5,8 @@ import yaml
 import os
 import cv2
 import pickle
-from . import transforms
 import numpy as np
-from .transforms import Augmentation
+from datasets.ucf.transforms import Augmentation
 from PIL import Image
 
 def UCF_collate_fn(batch_data):
@@ -85,27 +84,29 @@ class UCF_dataset(data.Dataset):
             for i, line in enumerate(lines):
                 line = line.rstrip().split(' ')
                 label = int(line[0]) - 1
-                labels.append(label)
+                onehot_vector = np.zeros(24)
+                onehot_vector[label] = 1.
+                labels.append(onehot_vector)
                 box = [float(line[1]), float(line[2]), float(line[3]), float(line[4])] 
                 boxes.append(box)
 
         boxes = np.array(boxes)
-        labels = np.expand_dims(np.array(labels), axis=1)        
+        labels = np.array(labels)
         
-        # clip   : list of (num_frame) np.array [H, W, C] (BGR order, 0...1)
-        # boxes  : tensor of (num_box) tensor [nbox, 4], relative coordinate
-        # labels : tensor of (num_box) scalar
+        # clip   : list of (num_frame) PIL image (RGB order, 0 .. 255)
+        # boxes  : np array [nbox, 4], absolute coordinate (tl-br)
+        # labels : np array [nbox, nclass]
 
         targets = np.concatenate((boxes, labels), axis=1)
         clip, targets = self.transform(clip, targets)
         
         boxes = targets[:, :4]
-        labels = targets[:, -1]
+        labels = targets[:, 4:]
 
 
         # clip   : tensor [C, numframe, H, W] (RBG order)
-        # boxes  : tensor of (num_box) tensor [nbox, 4], relative coordinate
-        # labels : tensor of (num_box) scalar
+        # boxes  : tensor [nbox, 4], relative coordinate (tl-br)
+        # labels : tensor [nbox, nclass]
         if get_origin_image == True : 
             return original_image, clip, boxes, labels
         else:
@@ -114,7 +115,7 @@ class UCF_dataset(data.Dataset):
         
 if __name__ == "__main__":
     
-    root_path = r"H:\Datasets\ucf24"
+    root_path = "/home/manh/Datasets/UCF101-24/ucf242"
     split_path = "trainlist.txt"
     data_path = "rgb-images"
     ann_path = "labels"
@@ -124,4 +125,20 @@ if __name__ == "__main__":
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
                           , clip_length, sampling_rate, img_size=(224, 224))
     
-    dataset.__getitem__(0)
+    for i in range(13000, dataset.__len__()):
+        original_image, clip, boxes, labels = dataset.__getitem__(i, get_origin_image=True)
+        original_image = clip[:, -1, :, :].squeeze(1).permute(1, 2, 0).contiguous().numpy()
+
+        for box, label in zip(boxes, labels):
+            H, W, C = original_image.shape
+
+            pt1 = (int(box[0] * W), int(box[1] * H))
+            pt2 = (int(box[2] * W), int(box[3] * H))
+
+            cv2.rectangle(original_image, pt1, pt2, 1, 1, 1)
+            print(label)
+    
+        cv2.imshow('img', original_image)
+        k = cv2.waitKey()
+        if k == ord('q'):
+            break

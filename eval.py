@@ -32,7 +32,7 @@ def eval(model, dataloader):
 
     # Configure
     #iou_v = torch.linspace(0.5, 0.95, 10).cuda()  # iou vector for mAP@0.5:0.95
-    iou_v = torch.tensor([0.5])
+    iou_v = torch.tensor([0.5]).cuda()
     n_iou = iou_v.numel()
 
     m_pre = 0.
@@ -133,7 +133,7 @@ def eval_on_UCF101(pretrain_path, size):
     dataloader = data.DataLoader(dataset, 32, False, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo_v8(num_classes=24, ver='l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
+    model = yolo2stream(num_classes=24, backbone_2D='yolov8_l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
     model.to("cuda")
     model.eval()
 
@@ -153,7 +153,7 @@ def call_eval(pretrain_path):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_1.pth'
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_6.pth'
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)
