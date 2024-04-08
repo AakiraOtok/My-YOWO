@@ -61,15 +61,14 @@ def detect(dataset, model, num_classes=21, mapping=UCF101_idx2name):
 
         clip = clip.unsqueeze(0).to("cuda")
         outputs = model(clip)
-        outputs = non_max_suppression(outputs, conf_threshold=0.3, iou_threshold=0.5)[0]
+        outputs = non_max_suppression(outputs, conf_threshold=0.001, iou_threshold=0.5)[0]
 
         #print(outputs[0])
         #sys.exit()
         #print(bboxes)
 
         origin_image = cv2.resize(origin_image, (224, 224))
-        print(outputs[0:1, :4])
-        draw_bounding_box(origin_image, outputs[0:1, :4], outputs[0:1, 5], outputs[0:1, 4], mapping)
+        draw_bounding_box(origin_image, outputs[:, :4], outputs[:, 5], outputs[:, 4], mapping)
         cv2.imshow('img', origin_image)
         k = cv2.waitKey()
 
@@ -112,7 +111,7 @@ def detect_on_UCF101(size=300, version="original", pretrain_path=None):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_3.pth'
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_7.pth'
     
     dataset, model, num_classes, mapping = detect_on_UCF101(pretrain_path=pretrain_path, version="FPN", size=300)
     model.eval()

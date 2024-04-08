@@ -18,7 +18,7 @@ import glob
 
 from math import sqrt
 
-from datasets.ucf.load_data import UCF_dataset, UCF_collate_fn
+from datasets.ucf.load_data import UCF_dataset_test, UCF_collate_fn
 from model.YOLO2Stream import yolo2stream
 from utils.util import non_max_suppression
 import tqdm
@@ -127,7 +127,7 @@ def eval_on_UCF101(pretrain_path, size):
     clip_length = 16
     sampling_rate = 1
 
-    dataset = UCF_dataset(root_path, split_path, data_path, ann_path
+    dataset = UCF_dataset_test(root_path, split_path, data_path, ann_path
                           , clip_length, sampling_rate, img_size=(224, 224), transform=UCF_transform())
     
     dataloader = data.DataLoader(dataset, 32, False, collate_fn=UCF_collate_fn
@@ -153,7 +153,7 @@ def call_eval(pretrain_path):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_6.pth'
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_5.pth' 
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)

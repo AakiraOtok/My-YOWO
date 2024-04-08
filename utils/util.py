@@ -370,6 +370,7 @@ class ComputeLoss:
             gt[..., 0:4] = gt[..., 0:4].mul_(size[[1, 0, 1, 0]])
 
         gt_bboxes, gt_labels = gt.split((4, nclass), 2)  # cls, xyxy
+        
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
 
         # boxes
@@ -398,6 +399,10 @@ class ComputeLoss:
 
         target_bboxes /= stride_tensor
         target_scores_sum = target_scores.sum()
+
+        #for x in target_scores[fg_mask]:
+            #print(x)
+        #sys.exit()
 
         #######################################################################################################
         # cls loss
@@ -512,16 +517,18 @@ class ComputeLoss:
         #align_metric = pred_scores[i[0], :, i[1]].pow(self.alpha) * overlaps.pow(self.beta)
 
         # [B, 1029, nbox, nclass]
-        pred_scores_loss = pred_scores.unsqueeze(-2).repeat([1, 1, overlaps.shape[1], 1]).sigmoid()
+        pred_scores_loss = pred_scores.unsqueeze(-2).repeat([1, 1, overlaps.shape[1], 1])
 
-        # [B, 1, nbox, nclass]
+        # [B, 1029, nbox, nclass]
         true_scores      = true_labels.unsqueeze(1).repeat([1, pred_scores_loss.shape[1], 1, 1])
 
+        # [B, 1029, nbox]
+        scaler = true_scores.sum(-1)
+
         # [B, nbox, 1029]
-        #scores_loss = true_scores * torch.log(pred_scores_loss + self.eps) + (1 - true_scores) * torch.log(1 - pred_scores_loss + self.eps)
-        scores_loss = self.bce(pred_scores_loss, true_scores).sum(-1).permute(0, 2, 1).contiguous()
+        scores_loss = ((true_scores * pred_scores_loss).sum(-1) / scaler).permute(0, 2, 1).contiguous()
         
-        align_metric = overlaps / scores_loss
+        align_metric = scores_loss.pow(self.alpha) * overlaps.pow(self.beta)
         
         bs, n_boxes, _ = true_bboxes.shape
 
@@ -606,11 +613,11 @@ class ComputeLoss:
         target_scores = torch.where(fg_scores_mask > 0, target_scores, 0)
 
         # normalize
-        align_metric *= mask_pos
-        pos_align_metrics = align_metric.amax(axis=-1, keepdim=True)
-        pos_overlaps = (overlaps * mask_pos).amax(axis=-1, keepdim=True)
-        norm_align_metric = (align_metric * pos_overlaps / (pos_align_metrics + self.eps)).amax(-2)
-        norm_align_metric = norm_align_metric.unsqueeze(-1)
+        #align_metric *= mask_pos
+        #pos_align_metrics = align_metric.amax(axis=-1, keepdim=True)
+        #pos_overlaps = (overlaps * mask_pos).amax(axis=-1, keepdim=True)
+        #norm_align_metric = (align_metric * pos_overlaps / (pos_align_metrics + self.eps)).amax(-2)
+        #norm_align_metric = norm_align_metric.unsqueeze(-1)
         #target_scores = target_scores * norm_align_metric
         target_scores = target_scores
 
