@@ -121,12 +121,15 @@ class Head(torch.nn.Module):
         #c2 = max((filters[0] // 4, self.ch * 4))
 
         self.dfl = DFL(self.ch)
-        self.cls = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
-                                                           Conv(interchannels, interchannels, 3),
-                                                           nn.Conv2d(interchannels, self.nc, 1)) for x in filters)
-        self.box = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
-                                                           Conv(interchannels, interchannels, 3),
-                                                           nn.Conv2d(interchannels, 4 * self.ch, 1)) for x in filters)
+        #self.cls = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
+                                                           #Conv(interchannels, interchannels, 3),
+                                                           #nn.Conv2d(interchannels, self.nc, 1)) for x in filters)
+        #self.box = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
+                                                           #Conv(interchannels, interchannels, 3),
+                                                           #nn.Conv2d(interchannels, 4 * self.ch, 1)) for x in filters)
+        
+        self.cls = torch.nn.ModuleList(torch.nn.Sequential(nn.Conv2d(x, self.nc, 3, padding=1)) for x in filters)
+        self.box = torch.nn.ModuleList(torch.nn.Sequential(nn.Conv2d(x, 4 * self.ch, 3, padding=1)) for x in filters)
 
     def forward(self, x):
         for i in range(self.nl):
@@ -262,12 +265,12 @@ class CFAMBlock(nn.Module):
         return output
 
 class YOLO2Stream(torch.nn.Module):
-    def __init__(self, num_classes, backbone2D, backbone3D, fusion_module, pretrain_path=None):
+    def __init__(self, num_classes, backbone2D, backbone3D, fusion_module, interchannels, pretrain_path=None):
         super().__init__()
 
-        self.inter_channels_decoupled = 256
-        self.inter_channels_fusion = 256
-        self.inter_channels_detection = 256
+        self.inter_channels_decoupled = interchannels[0] 
+        self.inter_channels_fusion    = interchannels[1]
+        self.inter_channels_detection = interchannels[2]
 
         self.net2D = backbone2D
         self.net3D = backbone3D
@@ -296,9 +299,11 @@ class YOLO2Stream(torch.nn.Module):
         self.stride = self.detection_head.stride
         self.detection_head.initialize_biases()
 
-        if pretrain_path is not None:
+        if pretrain_path  != "None":
             self.load_state_dict(torch.load(pretrain_path))
         else : 
+            self.net2D.load_pretrain()
+            self.net3D.load_pretrain()
             self.init_conv2d()
 
     def forward(self, clips):
@@ -330,22 +335,24 @@ class YOLO2Stream(torch.nn.Module):
         """
         Initialize convolution parameters.
         """
-        for c in self.decoupled_head.modules():
-            if isinstance(c, nn.Conv2d):
-                nn.init.kaiming_normal_(c.weight)
-                if c.bias is not None:
-                    nn.init.constant_(c.bias, 0.)
+        for m in self.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eps = 1e-3
+                m.momentum = 0.03
 
-        for c in self.fusion.modules():
-            if isinstance(c, nn.Conv2d):
-                nn.init.kaiming_normal_(c.weight)
-                if c.bias is not None:
-                    nn.init.constant_(c.bias, 0.)
+        #for c in self.decoupled_head.modules():
+            #if isinstance(c, nn.Conv2d):
+                #nn.init.kaiming_normal_(c.weight)
+                #if c.bias is not None:
+                    #nn.init.constant_(c.bias, 0.)
 
-        self.detection_head.initialize_biases()
+        #for c in self.fusion.modules():
+            #if isinstance(c, nn.Conv2d):
+                #nn.init.kaiming_normal_(c.weight)
+                #if c.bias is not None:
+                    #nn.init.constant_(c.bias, 0.)
 
-
-def yolo2stream(num_classes, backbone_2D, backbone_3D, fusion_module, pretrain_path=None):
+def yolo2stream(num_classes, backbone_2D, backbone_3D, fusion_module, interchannels, pretrain_path=None):
 
     assert backbone_2D in ['yolov8_n', 'yolov8_s', 'yolov8_m', 'yolov8_l', 'yolov8_x'], "only suport for n, s, m, l, or x version"
     assert backbone_3D in ['resnext101', 'mobilenetv2', 'shufflenetv2'], "only suport for resnext101, mobilenetv2 or shufflenetv2"
@@ -369,7 +376,7 @@ def yolo2stream(num_classes, backbone_2D, backbone_3D, fusion_module, pretrain_p
     elif backbone_3D == 'shufflenetv2':
         backbone3D = shufflenetv2.get_model()
 
-    return YOLO2Stream(num_classes, backbone2D, backbone3D, fusion_module, pretrain_path)
+    return YOLO2Stream(num_classes, backbone2D, backbone3D, fusion_module, interchannels, pretrain_path)
 
 
 if __name__ == "__main__":

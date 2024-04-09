@@ -7,6 +7,10 @@ from functools import partial
 
 __all__ = ['ResNeXt', 'resnet50', 'resnet101']
 
+from utils.util import load_yaml_file
+
+config = load_yaml_file()
+
 
 
 def downsample_basic_block(x, planes, stride):
@@ -43,7 +47,7 @@ class ResNeXtBottleneck(nn.Module):
         self.conv3 = nn.Conv3d(
             mid_planes, planes * self.expansion, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm3d(planes * self.expansion)
-        self.relu = nn.SiLU(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -87,7 +91,7 @@ class ResNeXt(nn.Module):
             padding=(3, 3, 3),
             bias=False)
         self.bn1 = nn.BatchNorm3d(64)
-        self.relu = nn.SiLU(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
         
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
         
@@ -111,8 +115,7 @@ class ResNeXt(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        if pretrain_path is not None:
-            self.load_pretrain(pretrain_path=pretrain_path)
+        self.pretrain_path = pretrain_path
 
     def _make_layer(self,
                     block,
@@ -184,11 +187,11 @@ class ResNeXt(nn.Module):
 #     else:
 #         raise ValueError("Unsupported ft_portion: 'complete' or 'last_layer' expected")
     
-    def load_pretrain(self, pretrain_path):
+    def load_pretrain(self):
         
         state_dict = self.state_dict()
 
-        pretrain_state_dict = torch.load(pretrain_path)
+        pretrain_state_dict = torch.load(self.pretrain_path)
         for param_name, value in pretrain_state_dict['state_dict'].items():
             if param_name not in state_dict:
                 continue
@@ -207,7 +210,7 @@ def resnext50(**kwargs):
 def resnext101(**kwargs):
     """Constructs a ResNet-101 model.
     """
-    model = ResNeXt(ResNeXtBottleneck, [3, 4, 23, 3], **kwargs, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/resnext-101-kinetics.pth')
+    model = ResNeXt(ResNeXtBottleneck, [3, 4, 23, 3], **kwargs, pretrain_path=config['pretrain_resnext101'])
     return model
 
 

@@ -1,0 +1,29 @@
+pretrain_yolov8_n : None
+pretrain_yolov8_s : None
+pretrain_yolov8_m : /home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_m.pth
+pretrain_yolov8_l : /home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_l.pth
+pretrain_yolov8_x : None
+
+pretrain_shufflenetv2 : /home/manh/Projects/YOLO2Stream/weights/backbone3D/kinetics_shufflenetv2_2.0x_RGB_16_best.pth
+pretrain_resnext101   : /home/manh/Projects/YOLO2Stream/weights/backbone3D/resnext-101-kinetics.pth
+
+data_root     : /home/manh/Datasets/UCF101-24/ucf242
+sampling_rate : 1
+clip_length   : 16
+
+lr                : 0.0001
+weight_decay      : 0.0005
+adjustlr_schedule : [1, 2, 3, 4]
+max_epoch         : 7
+batch_size        : 8
+num_workers       : 6
+acc_grad          : 16
+max_step_warmup   : 500
+num_classes       : 24
+
+backbone2D           : yolov8_m
+backbone3D           : shufflenetv2
+fusion_module        : CFAM
+interchannels        : [256, 256, 256]
+
+pretrain_yolo2stream : None

@@ -3,6 +3,9 @@ import math
 import torch
 
 from utils.util import make_anchors
+from utils.util import load_yaml_file
+
+config = load_yaml_file()
 
 
 def pad(k, p=None, d=1):
@@ -140,8 +143,7 @@ class YOLO(torch.nn.Module):
         self.net = DarkNet(width, depth)
         self.fpn = DarkFPN(width, depth)
 
-        if pretrain_path is not None:
-            self.load_pretrain(pretrain_path)
+        self.pretrain_path = pretrain_path
 
     def forward(self, x):
         x = self.net(x)
@@ -155,10 +157,10 @@ class YOLO(torch.nn.Module):
                 delattr(m, 'norm')
         return self
 
-    def load_pretrain(self, pretrain_path):
+    def load_pretrain(self):
         state_dict = self.state_dict()
 
-        pretrain_state_dict = torch.load(pretrain_path)
+        pretrain_state_dict = torch.load(self.pretrain_path)
         
         for param_name, value in pretrain_state_dict.items():
             if param_name not in state_dict:
@@ -170,31 +172,31 @@ class YOLO(torch.nn.Module):
         print("backbone2D pretrained loaded!")
 
 
-def yolo_v8_n(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_n.pth'):
+def yolo_v8_n(pretrain_path=config['pretrain_yolov8_n']):
     depth = [1, 2, 2]
     width = [3, 16, 32, 64, 128, 256]
     return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_s(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_s.pth'):
+def yolo_v8_s(pretrain_path=config['pretrain_yolov8_s']):
     depth = [1, 2, 2]
     width = [3, 32, 64, 128, 256, 512]
     return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_m(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_m.pth'):
+def yolo_v8_m(pretrain_path=config['pretrain_yolov8_m']):
     depth = [2, 4, 4]
     width = [3, 48, 96, 192, 384, 576]
     return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_l(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_l.pth'):
+def yolo_v8_l(pretrain_path=config['pretrain_yolov8_l']):
     depth = [3, 6, 6]
     width = [3, 64, 128, 256, 512, 512]
     return YOLO(width, depth, pretrain_path)
 
 
-def yolo_v8_x(pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone2D/YOLOv8/v8_x.pth'):
+def yolo_v8_x(pretrain_path=config['pretrain_yolov8_x']):
     depth = [3, 6, 6]
     width = [3, 80, 160, 320, 640, 640]
     return YOLO(width, depth, pretrain_path)

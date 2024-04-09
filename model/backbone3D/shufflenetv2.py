@@ -10,6 +10,9 @@ from torch.autograd import Variable
 from collections import OrderedDict
 from torch.nn import init
 import math
+from utils.util import load_yaml_file
+
+config = load_yaml_file()
 
 
 def conv_bn(inp, oup, stride):
@@ -148,8 +151,7 @@ class ShuffleNetV2(nn.Module):
         self.conv_last      = conv_1x1x1_bn(input_channel, self.stage_out_channels[-1])
         self.avgpool        = nn.AvgPool3d((2, 1, 1), stride=1)
 
-        if pretrain_path is not None:
-            self.load_pretrain(pretrain_path=pretrain_path)
+        self.pretrain_path = pretrain_path
 
     def forward(self, x):
         out = self.conv1(x)
@@ -162,11 +164,11 @@ class ShuffleNetV2(nn.Module):
 
         return out
     
-    def load_pretrain(self, pretrain_path):
+    def load_pretrain(self):
         
         state_dict = self.state_dict()
 
-        pretrain_state_dict = torch.load(pretrain_path)
+        pretrain_state_dict = torch.load(self.pretrain_path)
         for param_name, value in pretrain_state_dict['state_dict'].items():
             if param_name not in state_dict:
                 continue
@@ -203,7 +205,7 @@ def get_model(**kwargs):
     """
     Returns the model.
     """
-    model = ShuffleNetV2(**kwargs, pretrain_path='/home/manh/Projects/YOLO2Stream/weights/backbone3D/kinetics_shufflenetv2_2.0x_RGB_16_best.pth')
+    model = ShuffleNetV2(**kwargs, pretrain_path=config['pretrain_shufflenetv2'])
     return model
    
 

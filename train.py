@@ -21,16 +21,26 @@ from utils.gradflow_check import plot_grad_flow
 from utils.util import EMA
 from eval import call_eval
 import logging
+from utils.util import load_yaml_file
+
+config = load_yaml_file()
 
 def warmup_learning_rate(optimizer, step):
-    max_step = 500.0
+    max_step = config['max_step_warmup']
     if (step > max_step):
         return
-    lr_init = 1e-4
+    lr_init = config['lr']
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr_init * step / max_step
-
-def train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(3, 5, 7), acc_grad=16, max_epoch=9):
+ 
+def train_model(dataloader, 
+                model, 
+                criterion, 
+                optimizer, 
+                adjustlr_schedule=config['adjustlr_schedule'], 
+                acc_grad=config['acc_grad'], 
+                max_epoch=config['max_epoch']):
+    
     torch.backends.cudnn.benchmark = True
     cur_epoch = 1
     loss_acc = 0.0
@@ -107,21 +117,26 @@ from model.YOLO2Stream import yolo2stream
 from utils.util import ComputeLoss
 from model import testing
 
-def train_on_UCF(img_size = (224, 224), pretrain_path = None):
-    root_path = "/home/manh/Datasets/UCF101-24/ucf242"
-    split_path = "trainlist.txt"
-    data_path = "rgb-images"
-    ann_path = "labels"
-    clip_length = 16
-    sampling_rate = 1
+def train_on_UCF():
+    root_path     = config['data_root']
+    split_path    = "trainlist.txt"
+    data_path     = "rgb-images"
+    ann_path      = "labels"
+    clip_length   = config['clip_length']
+    sampling_rate = config['sampling_rate']
 
     dataset = UCF_dataset(root_path, split_path, data_path, ann_path
-                          , clip_length, sampling_rate, img_size=img_size)
+                          , clip_length, sampling_rate)
     
-    dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
-                                 , num_workers=6, pin_memory=True)
+    dataloader = data.DataLoader(dataset, config['batch_size'], True, collate_fn=UCF_collate_fn
+                                 , num_workers=config['num_workers'], pin_memory=True)
     
-    model = yolo2stream(num_classes=24, backbone_2D='yolov8_m', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
+    model = yolo2stream(num_classes=config['num_classes'],
+                        backbone_2D=config['backbone2D'],
+                        backbone_3D=config['backbone3D'],
+                        fusion_module=config['fusion_module'],
+                        interchannels=config['interchannels'],
+                        pretrain_path=config['pretrain_yolo2stream'])
 
     total_params = round(sum(p.numel() for p in model.net2D.parameters()) // 1e6)
     print(f"Net2D #param: {total_params}")
@@ -144,16 +159,13 @@ def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     model.train()
     model.to("cuda")
     
-    #criterion = MultiBox_CIoU_Loss(num_classes=25)
-    #criterion = MultiBoxLoss(num_classes=25)
     criterion = ComputeLoss(model)
 
     return dataloader, model, criterion
 
 if __name__ == "__main__":
-    pretrain_path = None
-    dataloader, model, criterion = train_on_UCF(img_size=(224, 224), pretrain_path=pretrain_path)
+    dataloader, model, criterion = train_on_UCF()
 
-    optimizer  = optim.AdamW(params=model.parameters(), lr= 1e-4, weight_decay=5e-4)
+    optimizer  = optim.AdamW(params=model.parameters(), lr= config['lr'], weight_decay=config['weight_decay'])
 
-    train_model(dataloader, model, criterion, optimizer, adjustlr_schedule=(1, 2, 3, 4), max_epoch=7)   
+    train_model(dataloader, model, criterion, optimizer)   

@@ -8,7 +8,12 @@ import torch
 import torchvision
 import sys
 from torch.nn.functional import cross_entropy, one_hot
+import yaml
 
+def load_yaml_file(file_path = './config.yaml'):
+    with open(file_path, 'r') as file:
+        data = yaml.safe_load(file)
+    return data
 
 def setup_seed():
     """
@@ -322,6 +327,7 @@ class ComputeLoss:
         self.alpha = 0.5
         self.beta = 6.0
         self.eps = 1e-9
+        self.radius = 2.5
 
         self.bs = 1
         self.num_max_boxes = 0
@@ -393,7 +399,7 @@ class ComputeLoss:
         bboxes = (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype)
         target_bboxes, target_scores, fg_mask = self.assign(scores, bboxes,
                                                             gt_labels, gt_bboxes, mask_gt,
-                                                            anchor_points * stride_tensor)
+                                                            anchor_points * stride_tensor, stride_tensor)
         
         mask = target_scores.gt(0)[fg_mask]
 
@@ -469,7 +475,7 @@ class ComputeLoss:
             loss_dfl = (loss_dfl * weight).sum() / target_scores_sum
 
 
-        loss_cls *= 1.
+        loss_cls *= 0.5
         loss_box *= 7.5
         loss_dfl *= 1.5
 
@@ -477,13 +483,14 @@ class ComputeLoss:
         return loss_cls + loss_box + loss_dfl  # loss(cls, box, dfl)
 
     @torch.no_grad()
-    def assign(self, pred_scores, pred_bboxes, true_labels, true_bboxes, true_mask, anchors):
+    def assign(self, pred_scores, pred_bboxes, true_labels, true_bboxes, true_mask, anchors, stride_tensor):
         # print(pred_scores.shape) [B, 1029, nclass]
         # print(pred_bboxes.shape) [B, 1029, 4]
         # print(true_bboxes.shape) [B, nbox, 4]
         # print(true_labels.shape) #[B, nbox, nclass]
         # print(true_mask.shape) #[B, nbox, 1]
         # print(anchors.shape) #[1029, 2]
+        # print(stride_anchor.shape) [1029, 1]
         # there are some fake box for shape purpose
 
         """
@@ -541,8 +548,20 @@ class ComputeLoss:
         # [B, nbox, 1029]
         mask_in_gts = bbox_deltas.view(bs, n_boxes, anchors.shape[0], -1).amin(3).gt_(1e-9)
         
+        # [1029]
+        radius = (stride_tensor * self.radius).squeeze(-1)
+
+        # # print(anchors.shape) #[1029, 2]
+        # [B * nbox, 1, 2]
+        gt_center = (rb - lt) / 2.
+
         # [B, nbox, 1029]
-        metrics = align_metric * mask_in_gts
+        center_distance = torch.sqrt((gt_center - anchors[None]).pow(2).sum(-1)).view(bs, n_boxes, -1)
+
+        mask_in_radius = (center_distance - radius).gt(self.eps)
+
+        # [B, nbox, 1029]
+        metrics = align_metric * mask_in_gts * mask_in_radius
 
         # [B, nbox, top_k]
         top_k_mask = true_mask.repeat([1, 1, self.top_k]).bool()
@@ -565,7 +584,7 @@ class ComputeLoss:
         is_in_top_k = torch.where(is_in_top_k > 1, 0, is_in_top_k)
         mask_top_k = is_in_top_k.to(metrics.dtype)
         # merge all mask to a final mask, (b, max_num_obj, h*w)
-        mask_pos = mask_top_k * mask_in_gts * true_mask
+        mask_pos = mask_top_k * mask_in_gts * mask_in_radius * true_mask
 
         # [B, 1029]
         fg_mask = mask_pos.sum(-2)
