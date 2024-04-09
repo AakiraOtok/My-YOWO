@@ -85,14 +85,14 @@ class DFL(torch.nn.Module):
     
 class DecoupleHead(torch.nn.Module):
 
-    def __init__(self, filters=()):
+    def __init__(self, interchannels, filters=()):
         super().__init__()
         self.nl = len(filters)  # number of detection layers
 
-        self.cls = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, x, 3),
-                                                           Conv(x, x, 3)) for x in filters)
-        self.box = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, x, 3),
-                                                           Conv(x, x, 3)) for x in filters)
+        self.cls = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
+                                                           Conv(interchannels, interchannels, 3)) for x in filters)
+        self.box = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
+                                                           Conv(interchannels, interchannels, 3)) for x in filters)
 
     def forward(self, x):
         out = []
@@ -109,7 +109,7 @@ class Head(torch.nn.Module):
     anchors = torch.empty(0)
     strides = torch.empty(0)
 
-    def __init__(self, nc=80, filters=()):
+    def __init__(self, nc, interchannels, filters=()):
         super().__init__()
         self.ch = 16  # DFL channels
         self.nc = nc  # number of classes
@@ -117,16 +117,16 @@ class Head(torch.nn.Module):
         self.no = nc + self.ch * 4  # number of outputs per anchor
         self.stride = torch.zeros(self.nl)  # strides computed during build
 
-        c1 = max(filters[0], self.nc)
-        c2 = max((filters[0] // 4, self.ch * 4))
+        #c1 = max(filters[0], self.nc)
+        #c2 = max((filters[0] // 4, self.ch * 4))
 
         self.dfl = DFL(self.ch)
-        self.cls = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, c1, 3),
-                                                           Conv(c1, c1, 3),
-                                                           nn.Conv2d(c1, self.nc, 1)) for x in filters)
-        self.box = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, c2, 3),
-                                                           Conv(c2, c2, 3),
-                                                           nn.Conv2d(c2, 4 * self.ch, 1)) for x in filters)
+        self.cls = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
+                                                           Conv(interchannels, interchannels, 3),
+                                                           nn.Conv2d(interchannels, self.nc, 1)) for x in filters)
+        self.box = torch.nn.ModuleList(torch.nn.Sequential(Conv(x, interchannels, 3),
+                                                           Conv(interchannels, interchannels, 3),
+                                                           nn.Conv2d(interchannels, 4 * self.ch, 1)) for x in filters)
 
     def forward(self, x):
         for i in range(self.nl):
@@ -166,18 +166,18 @@ class Head(torch.nn.Module):
 
 class Fusion_2D_3D(nn.Module):
 
-    def __init__(self, channels_2D, channels_3D, module_name):
+    def __init__(self, channels_2D, channels_3D, interchannels, module_name):
         super().__init__()
 
         box = []
         cls = []
         for in_channels in channels_2D:
             if module_name == 'CSP':
-                box.append(CSP(in_ch=in_channels[0] + channels_3D, out_ch=in_channels[0], n=3))
-                cls.append(CSP(in_ch=in_channels[1] + channels_3D, out_ch=in_channels[1], n=3))
+                box.append(CSP(in_ch=in_channels[0] + channels_3D, out_ch=interchannels, n=3))
+                cls.append(CSP(in_ch=in_channels[1] + channels_3D, out_ch=interchannels, n=3))
             elif module_name == 'CFAM':
-                box.append(CFAMBlock(in_channels[0] + channels_3D, in_channels[0]))
-                cls.append(CFAMBlock(in_channels[1] + channels_3D, in_channels[1]))
+                box.append(CFAMBlock(in_channels[0] + channels_3D, interchannels))
+                cls.append(CFAMBlock(in_channels[1] + channels_3D, interchannels))
 
         self.box = nn.ModuleList(box)
         self.cls = nn.ModuleList(cls)
@@ -262,8 +262,13 @@ class CFAMBlock(nn.Module):
         return output
 
 class YOLO2Stream(torch.nn.Module):
-    def __init__(self, width, depth, num_classes, backbone2D, backbone3D, fusion_module, pretrain_path=None):
+    def __init__(self, num_classes, backbone2D, backbone3D, fusion_module, pretrain_path=None):
         super().__init__()
+
+        self.inter_channels_decoupled = 256
+        self.inter_channels_fusion = 256
+        self.inter_channels_detection = 256
+
         self.net2D = backbone2D
         self.net3D = backbone3D
 
@@ -278,15 +283,15 @@ class YOLO2Stream(torch.nn.Module):
         out_channels_2D = [x.shape[1] for x in out_2D]
         out_channels_3D = out_3D.shape[1]
 
-        self.decoupled_head = DecoupleHead(out_channels_2D)
+        self.decoupled_head = DecoupleHead(self.inter_channels_decoupled, out_channels_2D)
 
         # [[box, cls], [box, cls], [box, cls]]
         out_2D = self.decoupled_head(out_2D)
 
         out_channels_2D = [[x[0].shape[1], x[1].shape[1]] for x in out_2D]                
-        self.fusion = Fusion_2D_3D(out_channels_2D, out_channels_3D, fusion_module)
+        self.fusion = Fusion_2D_3D(out_channels_2D, out_channels_3D, self.inter_channels_fusion, fusion_module)
 
-        self.detection_head = Head(num_classes, (width[3], width[4], width[5]))
+        self.detection_head = Head(num_classes, self.inter_channels_detection, [self.inter_channels_fusion for x in range(len(out_channels_2D))])
         self.detection_head.stride = torch.tensor([224 / x[0].shape[-2] for x in out_2D])
         self.stride = self.detection_head.stride
         self.detection_head.initialize_biases()
@@ -348,24 +353,14 @@ def yolo2stream(num_classes, backbone_2D, backbone_3D, fusion_module, pretrain_p
 
     if backbone_2D == 'yolov8_n':
         backbone2D = yolo_v8_n()
-        depth = [1, 2, 2]
-        width = [3, 16, 32, 64, 128, 256]
     elif backbone_2D == 'yolov8_s':
         backbone2D = yolo_v8_s()
-        depth = [1, 2, 2]
-        width = [3, 32, 64, 128, 256, 512]
     elif backbone_2D == 'yolov8_m':
         backbone2D = yolo_v8_m()
-        depth = [2, 4, 4]
-        width = [3, 48, 96, 192, 384, 576]
     elif backbone_2D == 'yolov8_l':
         backbone2D = yolo_v8_l()
-        depth = [3, 6, 6]
-        width = [3, 64, 128, 256, 512, 512]
     elif backbone_2D == 'yolov8_x':
         backbone2D = yolo_v8_x()
-        depth = [3, 6, 6]
-        width = [3, 80, 160, 320, 640, 640]
 
     if backbone_3D == 'resnext101':
         backbone3D = resnext.resnext101()
@@ -374,7 +369,7 @@ def yolo2stream(num_classes, backbone_2D, backbone_3D, fusion_module, pretrain_p
     elif backbone_3D == 'shufflenetv2':
         backbone3D = shufflenetv2.get_model()
 
-    return YOLO2Stream(width, depth, num_classes, backbone2D, backbone3D, fusion_module, pretrain_path)
+    return YOLO2Stream(num_classes, backbone2D, backbone3D, fusion_module, pretrain_path)
 
 
 if __name__ == "__main__":

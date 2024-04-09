@@ -121,24 +121,24 @@ def train_on_UCF(img_size = (224, 224), pretrain_path = None):
     dataloader = data.DataLoader(dataset, 8, True, collate_fn=UCF_collate_fn
                                  , num_workers=6, pin_memory=True)
     
-    model = yolo2stream(num_classes=24, backbone_2D='yolov8_l', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
+    model = yolo2stream(num_classes=24, backbone_2D='yolov8_m', backbone_3D='shufflenetv2', fusion_module='CFAM', pretrain_path=pretrain_path)
 
-    total_params = sum(p.numel() for p in model.net2D.parameters())
+    total_params = round(sum(p.numel() for p in model.net2D.parameters()) // 1e6)
     print(f"Net2D #param: {total_params}")
 
-    total_params = sum(p.numel() for p in model.net3D.parameters())
+    total_params = round(sum(p.numel() for p in model.net3D.parameters()) // 1e6)
     print(f"Net3D #param: {total_params}")
     
-    total_params = sum(p.numel() for p in model.decoupled_head.parameters())
+    total_params = round(sum(p.numel() for p in model.decoupled_head.parameters()) // 1e6)
     print(f"Decoupled head #param: {total_params}")
 
-    total_params = sum(p.numel() for p in model.fusion.parameters())
+    total_params = round(sum(p.numel() for p in model.fusion.parameters()) // 1e6)
     print(f"Fusion #param: {total_params}")
 
-    total_params = sum(p.numel() for p in model.detection_head.parameters())
+    total_params = round(sum(p.numel() for p in model.detection_head.parameters()) // 1e6)
     print(f"Detection #param: {total_params}")
 
-    total_params = sum(p.numel() for p in model.parameters())
+    total_params = round(sum(p.numel() for p in model.parameters()) // 1e6)
     print(f"Tổng số lượng tham số: {total_params}")
     #sys.exit()
     model.train()

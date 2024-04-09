@@ -153,7 +153,7 @@ def call_eval(pretrain_path):
 
 if __name__ == "__main__":
 
-    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_5.pth' 
+    pretrain_path = '/home/manh/Projects/YOLO2Stream/weights/model_checkpoint/ema_epoch_4.pth' 
     size          = (224, 224)
 
     model, dataloader = eval_on_UCF101(pretrain_path=pretrain_path, size=size)
